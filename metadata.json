@@ -1,0 +1,6 @@
+{
+  "name": "Unila",
+  "description": "Planilha e Gestor de Vistorias de Manutenção para Apartamentos (Blocos A, B e E).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
