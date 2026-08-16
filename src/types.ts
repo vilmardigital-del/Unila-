@@ -18,7 +18,8 @@ export interface ApartmentInspection {
   isGenerated: boolean;
   updatedAt?: string;
   inspectorName?: string;
-  generalNotes?: string;
+  keyCount?: '1 chave' | '2 chave' | '3 chave' | '4 chave' | '5 chave';
+  occupancyStatus?: 'ocupado' | 'desocupado';
   items: Record<string, InspectionItemState>;
   status?: 'rascunho' | 'finalizada';
   finalizedAt?: string;
@@ -31,7 +32,7 @@ export interface FinalizedInspection {
   number: string;
   floor: 'Térreo' | '1º Andar' | '2º Andar';
   inspectorName?: string;
-  generalNotes?: string;
+  keyCount?: '1 chave' | '2 chave' | '3 chave' | '4 chave' | '5 chave';
   finalizedAt: string; // ISO String timestamp
   inspectionDate: string; // YYYY-MM-DD
   inspectionTime: string; // HH:mm

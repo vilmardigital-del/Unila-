@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Header } from './components/Header';
-import { SearchAndGenerator } from './components/SearchAndGenerator';
 import { ApartmentCard } from './components/ApartmentCard';
 import { ApartmentSpreadsheet } from './components/ApartmentSpreadsheet';
 import { GeneralDashboard } from './components/GeneralDashboard';
 import { InspectionHistory } from './components/InspectionHistory';
+import { SearchAndGenerator } from './components/SearchAndGenerator';
 import { ApartmentInspection, BuildingBlock, InspectionItemState, FinalizedInspection } from './types';
 import { loadStoredApartments, saveApartmentsState } from './utils/storage';
 import { createEmptyItemsMap } from './data/apartments';
@@ -16,6 +16,10 @@ export default function App() {
   const [selectedAptId, setSelectedAptId] = useState<string | null>(null);
   const [aptToDelete, setAptToDelete] = useState<string | null>(null);
   const [showGenerateAllModal, setShowGenerateAllModal] = useState<boolean>(false);
+  const [showGenerateFilteredModal, setShowGenerateFilteredModal] = useState<boolean>(false);
+  const [inspectorName, setInspectorName] = useState<string>('');
+  const [apartmentStatus, setApartmentStatus] = useState<string>('');
+  const [keyCount, setKeyCount] = useState<string>('');
 
   // Temporary snapshot when viewing a historical finalized inspection
   const [historicalViewApt, setHistoricalViewApt] = useState<ApartmentInspection | null>(null);
@@ -73,7 +77,7 @@ export default function App() {
             updatedAt: new Date().toISOString(),
             finalizedAt: undefined,
             inspectorName: '',
-            generalNotes: '',
+            keyCount: undefined,
             items: newEmptyItems
           };
         }
@@ -99,7 +103,7 @@ export default function App() {
             updatedAt: undefined,
             finalizedAt: undefined,
             inspectorName: '',
-            generalNotes: '',
+            keyCount: undefined,
             items: newEmptyItems
           };
         }
@@ -120,7 +124,7 @@ export default function App() {
       isGenerated: true,
       updatedAt: historical.finalizedAt,
       inspectorName: historical.inspectorName,
-      generalNotes: historical.generalNotes,
+      keyCount: historical.keyCount,
       items: historical.items,
       status: 'finalizada',
       finalizedAt: historical.finalizedAt
@@ -131,14 +135,22 @@ export default function App() {
   };
 
   // Batch generate all 144 apartment sheets
-  const handleGenerateAll = () => {
+  const handleGenerateFiltered = (inspector: string, status: 'ocupado' | 'desocupado', keys: '1 chave' | '2 chave' | '3 chave' | '4 chave' | '5 chave') => {
     setApartments(prev => {
-      const next = prev.map(a => ({
-        ...a,
-        isGenerated: true,
-        updatedAt: a.updatedAt || new Date().toISOString()
-      }));
-      saveApartmentsState(next, { allGenerated: true, defaultInspector: '' });
+      const next = prev.map(a => {
+        if (filteredApartments.some(fa => fa.apartmentId === a.apartmentId)) {
+          return {
+            ...a,
+            isGenerated: true,
+            inspectorName: inspector,
+            occupancyStatus: status,
+            keyCount: keys,
+            updatedAt: a.updatedAt || new Date().toISOString()
+          };
+        }
+        return a;
+      });
+      saveApartmentsState(next, { allGenerated: false, defaultInspector: inspector });
       return next;
     });
   };
@@ -169,20 +181,25 @@ export default function App() {
     }
   });
 
-  // Filter apartments list according to search term
+  // Filter apartments list according to search term (Hide finalized ones from main screen)
   const filteredApartments = useMemo(() => {
     return apartments.filter(apt => {
+      // If the inspection is finalized, do not display it on the initial screen (only in Banco de Vistorias)
+      if (apt.status === 'finalizada') {
+        return false;
+      }
+
       const term = searchTerm.trim().toLowerCase();
 
       // If user typed a search term, match apartment ID, inspector name or notes
       if (term.length > 0) {
         const matchId = apt.apartmentId.toLowerCase().includes(term);
         const matchInspector = (apt.inspectorName || '').toLowerCase().includes(term);
-        const matchNotes = (apt.generalNotes || '').toLowerCase().includes(term);
-        return matchId || matchInspector || matchNotes;
+        // const matchNotes = (apt.generalNotes || '').toLowerCase().includes(term); // Removed
+        return matchId || matchInspector; // Simplified
       }
 
-      // By default: show generated sheets
+      // By default: show generated sheets that are not finalized
       return apt.isGenerated;
     });
   }, [apartments, searchTerm]);
@@ -217,13 +234,11 @@ export default function App() {
         {/* VIEW 1: SEARCH & APARTMENT LIST */}
         {activeView === 'search' && (
           <div className="space-y-6">
-            
-            {/* Search & Generator Controls */}
             <SearchAndGenerator
               searchTerm={searchTerm}
               setSearchTerm={setSearchTerm}
-              onGenerateAll={() => setShowGenerateAllModal(true)}
-              generatedCount={generatedCount}
+              onGenerateFiltered={() => setShowGenerateFilteredModal(true)}
+              filteredCount={filteredApartments.length}
               totalApartments={totalApartments}
             />
 
@@ -249,7 +264,7 @@ export default function App() {
                     Nenhum apartamento encontrado para os filtros selecionados. Tente buscar por "A001", "B102" ou "E205".
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  <div className="flex flex-col gap-4">
                     {filteredApartments.map(apt => (
                       <ApartmentCard
                         key={apt.apartmentId}
@@ -274,7 +289,6 @@ export default function App() {
             onUpdateApartment={updateApartmentInState}
             onBack={() => setActiveView('search')}
             onGoToHistory={() => setActiveView('history')}
-            onStartNewInspectionForApartment={handleStartNewInspectionForApartment}
             onDeleteApartmentSheet={handleDeleteApartmentSheet}
           />
         )}
@@ -343,6 +357,65 @@ export default function App() {
                 className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs sm:text-sm transition-colors shadow-md cursor-pointer"
               >
                 Sim, Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Generation Modal for Filtered Apartments */}
+      {showGenerateFilteredModal && (
+        <div className="fixed inset-0 bg-purple-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border-2 border-purple-200 space-y-5">
+            <h3 className="text-xl font-extrabold text-purple-950">Dados da Vistoria</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-purple-900 mb-1">Vistoriador / Responsável</label>
+                <input type="text" value={inspectorName} onChange={(e) => setInspectorName(e.target.value)} className="w-full p-3 border border-purple-200 rounded-xl" placeholder="Nome do vistoriador" />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-purple-900 mb-1">Status do Apartamento</label>
+                <select value={apartmentStatus} onChange={(e) => setApartmentStatus(e.target.value as any)} className="w-full p-3 border border-purple-200 rounded-xl">
+                  <option value="">Selecione...</option>
+                  <option value="ocupado">Ocupado</option>
+                  <option value="desocupado">Desocupado</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-purple-900 mb-1">Quantidade de Chaves</label>
+                <select value={keyCount} onChange={(e) => setKeyCount(e.target.value as any)} className="w-full p-3 border border-purple-200 rounded-xl">
+                  <option value="">Selecione...</option>
+                  <option value="1 chave">1 chave</option>
+                  <option value="2 chave">2 chave</option>
+                  <option value="3 chave">3 chave</option>
+                  <option value="4 chave">4 chave</option>
+                  <option value="5 chave">5 chave</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setShowGenerateFilteredModal(false)}
+                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (inspectorName && apartmentStatus && keyCount) {
+                    handleGenerateFiltered(inspectorName, apartmentStatus as any, keyCount as any);
+                    setShowGenerateFilteredModal(false);
+                  } else {
+                    alert("Por favor, preencha todos os campos.");
+                  }
+                }}
+                className="flex-1 py-3 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-xl text-sm"
+              >
+                OK
               </button>
             </div>
           </div>

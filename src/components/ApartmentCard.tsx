@@ -31,7 +31,7 @@ export const ApartmentCard: React.FC<ApartmentCardProps> = ({
   const hasStarted = (countSim + countNao) > 0;
 
   return (
-    <div className={`rounded-xl border transition-all duration-200 p-4 flex flex-col justify-between ${
+    <div className={`rounded-xl border transition-all duration-200 p-4 flex flex-col justify-between min-w-[280px] ${
       apartment.isGenerated
         ? 'bg-white border-purple-200 hover:border-purple-500 hover:shadow-md'
         : 'bg-purple-50/40 border-dashed border-purple-200/80 hover:bg-purple-50 hover:border-purple-300'

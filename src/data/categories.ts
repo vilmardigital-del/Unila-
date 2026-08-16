@@ -11,7 +11,11 @@ export const MAINTENANCE_CATEGORIES: CategoryDefinition[] = [
       'Rachadura',
       'Infiltração',
       'Teto',
-      'Gesso'
+      'Gesso',
+      'Fechadura',
+      'Portas',
+      'Janelas',
+      'Forro PVC'
     ]
   },
   {
@@ -40,7 +44,22 @@ export const MAINTENANCE_CATEGORIES: CategoryDefinition[] = [
       'Tomadas',
       'Ventilador',
       'Campainha',
-      'Disjuntores'
+      'Disjuntores',
+      'Luminaria',
+      'Calhas De Lampada'
+    ]
+  },
+  {
+    id: 'mobilia',
+    name: 'Mobília',
+    iconName: 'Armchair',
+    items: [
+      'Pia',
+      'Armario Pia',
+      'Camas',
+      'Colxoes',
+      'Guarda Roupas',
+      'Escrivania'
     ]
   }
 ];
@@ -55,5 +74,22 @@ export const COMMON_OBSERVATION_SUGGESTIONS = [
   'Pintura descascando',
   'Infiltração no canto superior',
   'Mancha de mofo identificada',
-  'Registro com folga'
+  'Registro com folga',
+  'Troca de miolo',
+  'Troca da fechadura completa',
+  'Troca do trinco',
+  'Troca do marco',
+  'Troca da porta',
+  'Pintura da porta',
+  'Troca da dobradiça',
+  'Troca das hastes da janela',
+  'Troca do vidro',
+  'Troca da calha da lâmpada',
+  'Troca da luminária',
+  'Móvel quebrado',
+  'Móvel sem conserto',
+  'Móvel faltando',
+  'Colchão rasgado',
+  'Cama quebrada',
+  'Sujeira, precisa de limpeza'
 ];
