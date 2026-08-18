@@ -7,13 +7,15 @@ interface ApartmentCardProps {
   onSelect: (aptId: string) => void;
   onGenerate: (aptId: string) => void;
   onDelete?: (aptId: string) => void;
+  onNewInspection?: (aptId: string) => void;
 }
 
 export const ApartmentCard: React.FC<ApartmentCardProps> = ({
   apartment,
   onSelect,
   onGenerate,
-  onDelete
+  onDelete,
+  onNewInspection
 }) => {
   let countSim = 0;
   let countNao = 0;
@@ -29,10 +31,13 @@ export const ApartmentCard: React.FC<ApartmentCardProps> = ({
 
   const isComplete = (countSim + countNao) === totalItems && totalItems > 0;
   const hasStarted = (countSim + countNao) > 0;
+  const isFinalized = apartment.status === 'finalizada';
 
   return (
     <div className={`rounded-xl border transition-all duration-200 p-4 flex flex-col justify-between min-w-[280px] ${
-      apartment.isGenerated
+      isFinalized
+        ? 'bg-white border-emerald-300 hover:border-emerald-500 hover:shadow-md'
+        : apartment.isGenerated
         ? 'bg-white border-purple-200 hover:border-purple-500 hover:shadow-md'
         : 'bg-purple-50/40 border-dashed border-purple-200/80 hover:bg-purple-50 hover:border-purple-300'
     }`}>
@@ -40,7 +45,9 @@ export const ApartmentCard: React.FC<ApartmentCardProps> = ({
         {/* Card Header */}
         <div className="flex items-center justify-between gap-2 pb-2 border-b border-gray-100">
           <div className="flex items-center gap-2">
-            <span className="w-9 h-9 rounded-lg bg-purple-900 text-white font-black text-sm flex items-center justify-center shadow-xs">
+            <span className={`w-9 h-9 rounded-lg text-white font-black text-sm flex items-center justify-center shadow-xs ${
+              isFinalized ? 'bg-emerald-800' : 'bg-purple-900'
+            }`}>
               {apartment.apartmentId}
             </span>
             <div>
@@ -54,7 +61,12 @@ export const ApartmentCard: React.FC<ApartmentCardProps> = ({
           </div>
 
           {/* Status Badge */}
-          {apartment.isGenerated ? (
+          {isFinalized ? (
+            <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 text-[11px] font-bold px-2 py-0.5 rounded-full border border-emerald-300">
+              <CheckCircle className="w-3 h-3 text-emerald-600" />
+              Finalizada (Salva)
+            </span>
+          ) : apartment.isGenerated ? (
             countSim > 0 ? (
               <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-[11px] font-bold px-2 py-0.5 rounded-full border border-amber-300">
                 <AlertTriangle className="w-3 h-3 text-amber-600" />
@@ -101,21 +113,53 @@ export const ApartmentCard: React.FC<ApartmentCardProps> = ({
         )}
 
         {/* Inspector or Updated date */}
-        {apartment.isGenerated && (apartment.inspectorName || apartment.updatedAt) && (
+        {apartment.isGenerated && (apartment.inspectorName || apartment.updatedAt || apartment.finalizedAt) && (
           <div className="mt-2 text-[11px] text-gray-500 flex flex-col gap-0.5">
             {apartment.inspectorName && (
               <span className="truncate">Vistoriador: <strong className="text-gray-700">{apartment.inspectorName}</strong></span>
             )}
-            {apartment.updatedAt && (
+            {apartment.finalizedAt ? (
+              <span>Finalizado: {new Date(apartment.finalizedAt).toLocaleDateString('pt-BR')} às {new Date(apartment.finalizedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+            ) : apartment.updatedAt ? (
               <span>Atualizado: {new Date(apartment.updatedAt).toLocaleDateString('pt-BR')}</span>
-            )}
+            ) : null}
           </div>
         )}
       </div>
 
       {/* Action Button */}
       <div className="mt-4 pt-2 border-t border-gray-100">
-        {apartment.isGenerated ? (
+        {isFinalized ? (
+          <div className="flex items-center gap-1.5 w-full">
+            <button
+              onClick={() => onSelect(apartment.apartmentId)}
+              className="flex-1 py-2 px-2.5 bg-purple-900 hover:bg-purple-800 text-white font-semibold text-xs rounded-lg transition-colors flex items-center justify-center gap-1 shadow-xs cursor-pointer"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-purple-200" />
+              <span>Ver Planilha</span>
+            </button>
+            <button
+              onClick={() => (onNewInspection ? onNewInspection(apartment.apartmentId) : onGenerate(apartment.apartmentId))}
+              className="py-2 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-lg transition-colors flex items-center justify-center gap-1 shadow-xs cursor-pointer"
+              title="Gerar nova planilha para nova vistoria"
+            >
+              <PlusCircle className="w-3.5 h-3.5 text-amber-300" />
+              <span>Nova Vistoria</span>
+            </button>
+            {onDelete && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(apartment.apartmentId);
+                }}
+                className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors border border-purple-200 cursor-pointer"
+                title="Excluir / Resetar esta planilha"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        ) : apartment.isGenerated ? (
           <div className="flex items-center gap-1.5 w-full">
             <button
               onClick={() => onSelect(apartment.apartmentId)}

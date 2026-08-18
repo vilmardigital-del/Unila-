@@ -18,13 +18,12 @@ import { exportAllApartmentsSummaryToCSV } from '../utils/excel';
 interface GeneralDashboardProps {
   apartments: ApartmentInspection[];
   onSelectApartment: (aptId: string) => void;
-  onGenerateAll: () => void;
+  onGenerateAll?: () => void;
 }
 
 export const GeneralDashboard: React.FC<GeneralDashboardProps> = ({
   apartments,
-  onSelectApartment,
-  onGenerateAll
+  onSelectApartment
 }) => {
   const [blockFilter, setBlockFilter] = useState<'ALL' | 'A' | 'B' | 'E'>('ALL');
   const [searchTerm, setSearchTerm] = useState('');

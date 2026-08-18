@@ -15,7 +15,6 @@ export default function App() {
   const [activeView, setActiveView] = useState<'search' | 'dashboard' | 'spreadsheet' | 'history'>('search');
   const [selectedAptId, setSelectedAptId] = useState<string | null>(null);
   const [aptToDelete, setAptToDelete] = useState<string | null>(null);
-  const [showGenerateAllModal, setShowGenerateAllModal] = useState<boolean>(false);
   const [showGenerateFilteredModal, setShowGenerateFilteredModal] = useState<boolean>(false);
   const [inspectorName, setInspectorName] = useState<string>('');
   const [apartmentStatus, setApartmentStatus] = useState<string>('');
@@ -272,6 +271,7 @@ export default function App() {
                         onSelect={handleSelectApartment}
                         onGenerate={handleGenerateSingle}
                         onDelete={(aptId) => setAptToDelete(aptId)}
+                        onNewInspection={handleStartNewInspectionForApartment}
                       />
                     ))}
                   </div>
@@ -290,6 +290,7 @@ export default function App() {
             onBack={() => setActiveView('search')}
             onGoToHistory={() => setActiveView('history')}
             onDeleteApartmentSheet={handleDeleteApartmentSheet}
+            onStartNewInspection={handleStartNewInspectionForApartment}
           />
         )}
 
@@ -306,7 +307,6 @@ export default function App() {
           <GeneralDashboard
             apartments={apartments}
             onSelectApartment={handleSelectApartment}
-            onGenerateAll={handleGenerateAll}
           />
         )}
 
@@ -416,45 +416,6 @@ export default function App() {
                 className="flex-1 py-3 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-xl text-sm"
               >
                 OK
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Confirmation Modal for Batch Generate All 144 Apartments */}
-      {showGenerateAllModal && (
-        <div className="fixed inset-0 bg-purple-950/80 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-fadeIn">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border-2 border-purple-200 text-center space-y-5">
-            <div className="w-16 h-16 bg-purple-100 text-purple-700 rounded-2xl flex items-center justify-center mx-auto shadow-xs">
-              <Zap className="w-8 h-8 text-amber-500 fill-amber-500" />
-            </div>
-
-            <div>
-              <h3 className="text-xl font-extrabold text-purple-950">
-                Gerar Todas as Planilhas?
-              </h3>
-              <p className="text-xs sm:text-sm text-gray-600 mt-2 leading-relaxed">
-                Deseja gerar as planilhas de vistoria para todos os <strong>144 apartamentos</strong> (Blocos A, B e E)?
-              </p>
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => setShowGenerateAllModal(false)}
-                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl text-xs sm:text-sm transition-colors cursor-pointer"
-              >
-                Não, Cancelar
-              </button>
-              <button
-                onClick={() => {
-                  handleGenerateAll();
-                  setShowGenerateAllModal(false);
-                }}
-                className="flex-1 py-3 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white font-bold rounded-xl text-xs sm:text-sm shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
-                <span>Sim, Gerar Planilhas</span>
               </button>
             </div>
           </div>

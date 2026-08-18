@@ -32,6 +32,7 @@ interface ApartmentSpreadsheetProps {
   onBack: () => void;
   onGoToHistory?: () => void;
   onDeleteApartmentSheet?: (apartmentId: string) => void;
+  onStartNewInspection?: (apartmentId: string) => void;
 }
 
 export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
@@ -39,7 +40,8 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
   onUpdateApartment,
   onBack,
   onGoToHistory,
-  onDeleteApartmentSheet
+  onDeleteApartmentSheet,
+  onStartNewInspection
 }) => {
   const [activeObservationField, setActiveObservationField] = useState<string | null>(null);
   const [showSavedToast, setShowSavedToast] = useState(false);
@@ -236,8 +238,25 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
           </h1>
         </div>
 
-        {/* Lock Banner Warning */}
-        {isLocked && (
+        {/* Lock Banner / Finalized Banner Warning */}
+        {apartment.status === 'finalizada' ? (
+          <div className="bg-emerald-50 border-b-2 border-emerald-300 px-4 py-2.5 text-emerald-950 text-xs font-bold flex flex-col sm:flex-row items-center justify-between gap-2 print:hidden">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
+              <span>Esta vistoria foi <strong>finalizada</strong> e arquivada com sucesso no banco de dados para consultas futuras.</span>
+            </div>
+            {onStartNewInspection && (
+              <button
+                onClick={() => onStartNewInspection(apartment.apartmentId)}
+                className="px-3 py-1.5 bg-purple-900 hover:bg-purple-800 text-white font-extrabold rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition-colors shrink-0 cursor-pointer"
+                title="Criar uma nova planilha zerada para este apartamento"
+              >
+                <PlusCircle className="w-3.5 h-3.5 text-amber-300" />
+                <span>Gerar Nova Planilha (Nova Verificação)</span>
+              </button>
+            )}
+          </div>
+        ) : isLocked ? (
           <div className="bg-amber-100 border-b-2 border-amber-300 px-4 py-2.5 text-amber-950 text-xs font-bold flex items-center justify-between gap-2 print:hidden">
             <div className="flex items-center gap-2">
               <Lock className="w-4 h-4 text-amber-800 shrink-0" />
@@ -253,7 +272,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
               Habilitar Edição
             </button>
           </div>
-        )}
+        ) : null}
 
         {/* Spreadsheet Purple Banner */}
         <div className="bg-gradient-to-r from-purple-900 via-purple-800 to-indigo-950 text-white p-5 print:hidden">
@@ -266,11 +285,15 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                 <span className="text-xs bg-purple-700 text-purple-100 px-2 py-0.5 rounded-md font-semibold">
                   PLANILHA DE MANUTENÇÃO
                 </span>
-                {isLocked && (
+                {apartment.status === 'finalizada' ? (
+                  <span className="text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-md font-bold flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> Finalizada
+                  </span>
+                ) : isLocked ? (
                   <span className="text-xs bg-amber-500 text-amber-950 px-2 py-0.5 rounded-md font-bold flex items-center gap-1">
                     <Lock className="w-3 h-3" /> Bloqueada
                   </span>
-                )}
+                ) : null}
               </div>
               <h2 className="text-xl sm:text-2xl font-extrabold mt-1 text-purple-50">
                 Vistoria do Apartamento {apartment.apartmentId}
@@ -641,36 +664,63 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
           </button>
 
           <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-center sm:justify-end">
-            {/* Botão Editar (Habilitar Edição para Adicionar Solução) */}
-            <button
-              onClick={() => {
-                if (isLocked) {
-                  setManuallyUnlocked(true);
-                  setIsLocked(false);
-                } else {
-                  setIsLocked(true);
-                }
-              }}
-              className={`px-5 py-2.5 font-extrabold rounded-xl text-xs sm:text-sm flex items-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer ${
-                !isLocked
-                  ? 'bg-amber-600 text-white ring-2 ring-amber-300'
-                  : 'bg-amber-500 hover:bg-amber-600 text-white shadow-lg animate-pulse'
-              }`}
-              title="Liberar planilha para editar e adicionar solução"
-            >
-              {isLocked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-              <span>{isLocked ? 'Editar (Adicionar Solução)' : 'Edição Liberada'}</span>
-            </button>
+            {apartment.status === 'finalizada' ? (
+              <>
+                {onStartNewInspection && (
+                  <button
+                    onClick={() => onStartNewInspection(apartment.apartmentId)}
+                    className="px-5 py-2.5 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95 cursor-pointer"
+                    title="Criar nova planilha zerada para nova vistoria/verificação deste apartamento"
+                  >
+                    <PlusCircle className="w-4 h-4 text-amber-300" />
+                    <span>Gerar Nova Planilha (Nova Verificação)</span>
+                  </button>
+                )}
 
-            {/* Botão Finalizar Vistoria */}
-            <button
-              onClick={handleFinalize}
-              className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95 border border-emerald-500 cursor-pointer"
-              title="Finalizar esta vistoria e armazenar no banco de dados"
-            >
-              <FileCheck className="w-4 h-4 text-emerald-100" />
-              <span>Finalizar Vistoria</span>
-            </button>
+                {onGoToHistory && (
+                  <button
+                    onClick={onGoToHistory}
+                    className="px-4 py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-900 font-bold rounded-xl text-xs sm:text-sm flex items-center gap-2 border border-purple-200 transition-colors cursor-pointer"
+                  >
+                    <History className="w-4 h-4 text-purple-700" />
+                    <span>Banco de Vistorias</span>
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                {/* Botão Editar (Habilitar Edição para Adicionar Solução) */}
+                <button
+                  onClick={() => {
+                    if (isLocked) {
+                      setManuallyUnlocked(true);
+                      setIsLocked(false);
+                    } else {
+                      setIsLocked(true);
+                    }
+                  }}
+                  className={`px-5 py-2.5 font-extrabold rounded-xl text-xs sm:text-sm flex items-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer ${
+                    !isLocked
+                      ? 'bg-amber-600 text-white ring-2 ring-amber-300'
+                      : 'bg-amber-500 hover:bg-amber-600 text-white shadow-lg animate-pulse'
+                  }`}
+                  title="Liberar planilha para editar e adicionar solução"
+                >
+                  {isLocked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                  <span>{isLocked ? 'Editar (Adicionar Solução)' : 'Edição Liberada'}</span>
+                </button>
+
+                {/* Botão Finalizar Vistoria */}
+                <button
+                  onClick={handleFinalize}
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95 border border-emerald-500 cursor-pointer"
+                  title="Finalizar esta vistoria e armazenar no banco de dados"
+                >
+                  <FileCheck className="w-4 h-4 text-emerald-100" />
+                  <span>Finalizar Vistoria</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
 
@@ -716,13 +766,13 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                 Vistoria Finalizada com Sucesso!
               </h3>
               <p className="text-xs sm:text-sm text-gray-600 mt-2 leading-relaxed">
-                A planilha de vistoria do <strong>Apartamento {apartment.apartmentId}</strong> foi registrada no banco de dados com a data e hora atuais.
+                A planilha de vistoria do <strong>Apartamento {apartment.apartmentId}</strong> foi armazenada no banco de dados para pesquisa e consultas futuras.
               </p>
             </div>
 
             <div className="bg-purple-50 p-3.5 rounded-2xl border border-purple-200 text-xs text-left space-y-1">
               <div className="flex justify-between">
-                <span className="text-gray-600">Data e Hora:</span>
+                <span className="text-gray-600">Data e Hora de Registro:</span>
                 <strong className="text-purple-950">{new Date().toLocaleString('pt-BR')}</strong>
               </div>
               <div className="flex justify-between">
@@ -730,17 +780,33 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                 <strong className="text-purple-950">{apartment.inspectorName || 'Técnico Unila'}</strong>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Itens com Reparo (SIM):</span>
-                <strong className="text-amber-800 font-bold">{simCount}</strong>
+                <span className="text-gray-600">Status do Apartamento:</span>
+                <strong className="text-purple-950 capitalize">{apartment.occupancyStatus || 'Não informado'}</strong>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Quantidade de Chaves:</span>
+                <strong className="text-purple-950">{apartment.keyCount || 'Não informado'}</strong>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Itens em Ordem (NÃO):</span>
-                <strong className="text-emerald-800 font-bold">{naoCount}</strong>
+                <strong className="text-emerald-800 font-bold">{naoCount} de {totalCount}</strong>
               </div>
             </div>
 
             {/* Modal Actions */}
-            <div className="space-y-2 pt-2">
+            <div className="space-y-2.5 pt-2">
+              {onStartNewInspection && (
+                <button
+                  onClick={() => {
+                    setShowFinalizedModal(false);
+                    onStartNewInspection(apartment.apartmentId);
+                  }}
+                  className="w-full py-3 px-4 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white font-extrabold rounded-xl text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <PlusCircle className="w-4 h-4 text-amber-300" />
+                  <span>Gerar Nova Planilha para Nova Verificação (Apto {apartment.apartmentId})</span>
+                </button>
+              )}
 
               {onGoToHistory && (
                 <button
@@ -748,19 +814,30 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                     setShowFinalizedModal(false);
                     onGoToHistory();
                   }}
-                  className="w-full py-2.5 px-4 bg-purple-50 hover:bg-purple-100 text-purple-900 font-bold rounded-xl text-xs sm:text-sm border border-purple-200 flex items-center justify-center gap-2 transition-colors"
+                  className="w-full py-2.5 px-4 bg-purple-50 hover:bg-purple-100 text-purple-900 font-bold rounded-xl text-xs sm:text-sm border border-purple-200 flex items-center justify-center gap-2 transition-colors cursor-pointer"
                 >
                   <History className="w-4 h-4 text-purple-700" />
-                  <span>Ir para o Banco de Vistorias / Pesquisar por Data</span>
+                  <span>Pesquisar Vistorias no Banco de Dados</span>
                 </button>
               )}
 
-              <button
-                onClick={() => setShowFinalizedModal(false)}
-                className="w-full py-2 text-gray-500 hover:text-gray-700 font-medium text-xs underline"
-              >
-                Continuar Visualizando esta Planilha
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setShowFinalizedModal(false);
+                    onBack();
+                  }}
+                  className="flex-1 py-2 px-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-xl text-xs transition-colors cursor-pointer"
+                >
+                  Voltar ao Início
+                </button>
+                <button
+                  onClick={() => setShowFinalizedModal(false)}
+                  className="flex-1 py-2 px-3 text-gray-500 hover:text-gray-700 font-medium text-xs underline cursor-pointer"
+                >
+                  Ver Planilha Atual
+                </button>
+              </div>
             </div>
           </div>
         </div>
