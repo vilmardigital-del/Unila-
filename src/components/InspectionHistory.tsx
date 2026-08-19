@@ -14,26 +14,37 @@ import {
   Trash2,
   RefreshCw,
   FileCheck,
-  User
+  User,
+  Home,
+  Key,
+  ArrowLeft,
+  Wrench,
+  MessageSquareText,
+  ChevronDown,
+  ChevronUp,
+  X
 } from 'lucide-react';
-import { FinalizedInspection, BuildingBlock } from '../types';
+import { FinalizedInspection, BuildingBlock, InspectionItemState } from '../types';
 import { loadFinalizedInspections, deleteFinalizedInspection } from '../utils/historyStorage';
 import { exportSingleApartmentToCSV } from '../utils/excel';
 
 interface InspectionHistoryProps {
   onSelectHistoricalInspection: (inspection: FinalizedInspection) => void;
   onCreateNewForApartment: (apartmentId: string) => void;
+  onDeleteFinalizedInspection?: (apartmentId: string, inspectionId: string) => void;
+  onBack?: () => void;
 }
 
 export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
   onSelectHistoricalInspection,
-  onCreateNewForApartment
+  onCreateNewForApartment,
+  onDeleteFinalizedInspection,
+  onBack
 }) => {
   const [historyList, setHistoryList] = useState<FinalizedInspection[]>([]);
   const [searchApt, setSearchApt] = useState('');
   const [searchDate, setSearchDate] = useState('');
-  const [selectedBlock, setSelectedBlock] = useState<BuildingBlock | 'ALL'>('ALL');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'WITH_SIM' | 'ALL_OK'>('ALL');
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
 
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; aptId: string; dateStr: string } | null>(null);
 
@@ -49,13 +60,28 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
     if (deleteTarget) {
       const updated = deleteFinalizedInspection(deleteTarget.id);
       setHistoryList(updated);
+      if (onDeleteFinalizedInspection) {
+        onDeleteFinalizedInspection(deleteTarget.aptId, deleteTarget.id);
+      }
       setDeleteTarget(null);
     }
   };
 
+  const toggleExpandCard = (id: string) => {
+    setExpandedCards(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
+
+  const getInspectionItems = (items?: Record<string, InspectionItemState>): InspectionItemState[] => {
+    if (!items) return [];
+    return Object.values(items);
+  };
+
   const filteredList = useMemo(() => {
     return historyList.filter(item => {
-      // Search by Apartment ID or Inspector
+      // 1. Filter by Apartment ID or Inspector
       if (searchApt.trim()) {
         const term = searchApt.trim().toLowerCase();
         const matchId = item.apartmentId.toLowerCase().includes(term);
@@ -63,30 +89,21 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
         if (!matchId && !matchInspector) return false;
       }
 
-      // Search by Date (YYYY-MM-DD)
+      // 2. Filter by Date (YYYY-MM-DD)
       if (searchDate) {
         if (item.inspectionDate !== searchDate) return false;
       }
 
-      // Block filter
-      if (selectedBlock !== 'ALL' && item.block !== selectedBlock) return false;
-
-      // Status filter
-      if (statusFilter === 'WITH_SIM' && item.simCount === 0) return false;
-      if (statusFilter === 'ALL_OK' && item.simCount > 0) return false;
-
       return true;
     });
-  }, [historyList, searchApt, searchDate, selectedBlock, statusFilter]);
-
-  const totalFinalized = historyList.length;
+  }, [historyList, searchApt, searchDate]);
 
   return (
     <div className="space-y-6">
       
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-purple-900 via-purple-800 to-indigo-900 text-white rounded-2xl p-6 shadow-md border-b-4 border-purple-500">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="bg-gradient-to-r from-purple-900 via-purple-800 to-indigo-900 text-white rounded-2xl p-5 sm:p-6 shadow-md border-b-4 border-purple-500">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
               <span className="p-2 bg-white/10 rounded-xl text-purple-200 backdrop-blur-xs">
@@ -97,30 +114,31 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
               </h2>
             </div>
             <p className="text-xs sm:text-sm text-purple-200 mt-2 max-w-2xl leading-relaxed">
-              Consulte, pesquise e imprima todas as planilhas de vistoria que foram finalizadas no sistema. Você pode pesquisar por data, número do apartamento ou criar novas vistorias para qualquer apartamento.
+              Consulte as vistorias finalizadas filtrando por apartamento ou pela data da vistoria para verificar os serviços e manutenções realizados.
             </p>
           </div>
 
-          <div className="bg-purple-950/70 border border-purple-600/50 rounded-xl p-3 sm:px-5 sm:py-3 text-center self-start md:self-auto min-w-[160px]">
-            <span className="text-xs text-purple-300 font-semibold block uppercase tracking-wider">
-              Total Armazenadas
-            </span>
-            <span className="text-2xl sm:text-3xl font-black text-amber-300">
-              {totalFinalized}
-            </span>
-            <span className="text-[10px] text-purple-300 block">no banco de dados</span>
-          </div>
+          {onBack && (
+            <button
+              onClick={onBack}
+              className="px-4 py-2.5 bg-white text-purple-900 hover:bg-purple-50 font-bold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-md self-start sm:self-auto cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4 text-purple-800" />
+              <span>Voltar para Início</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Search & Filter Controls */}
-      <div className="bg-white border border-purple-200 rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-3 sm:gap-4">
+      {/* Search & Filter Controls: Apartment and Date Only */}
+      <div className="bg-white border border-purple-200 rounded-2xl p-4 sm:p-5 shadow-sm space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           
-          {/* Apt Search */}
-          <div className="md:col-span-5 relative">
-            <label className="block text-xs font-bold text-purple-900 mb-1">
-              Número do Apartamento / Vistoriador
+          {/* 1. Apartment Filter */}
+          <div className="relative">
+            <label className="block text-xs font-bold text-purple-900 mb-1 flex items-center gap-1.5">
+              <Building2 className="w-3.5 h-3.5 text-purple-700" />
+              <span>Filtrar por Apartamento</span>
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-purple-500">
@@ -131,114 +149,65 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
                 value={searchApt}
                 onChange={(e) => setSearchApt(e.target.value)}
                 placeholder="Ex: A001, B105, E216..."
-                className="w-full pl-9 pr-8 py-2 bg-purple-50/50 border border-purple-200 rounded-xl text-xs sm:text-sm text-purple-950 placeholder-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-600 font-medium"
+                className="w-full pl-9 pr-8 py-2.5 bg-purple-50/50 border border-purple-200 rounded-xl text-xs sm:text-sm text-purple-950 placeholder-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white font-medium transition-all"
               />
               {searchApt && (
                 <button
                   onClick={() => setSearchApt('')}
-                  className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-purple-700"
+                  className="absolute inset-y-0 right-0 pr-2.5 flex items-center text-gray-400 hover:text-purple-700 cursor-pointer"
+                  title="Limpar pesquisa por apartamento"
                 >
-                  ×
+                  <X className="w-4 h-4" />
                 </button>
               )}
             </div>
           </div>
 
-          {/* Date Picker */}
-          <div className="md:col-span-4">
-            <label className="block text-xs font-bold text-purple-900 mb-1 flex items-center justify-between">
-              <span>Data da Vistoria</span>
+          {/* 2. Date Filter */}
+          <div className="relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-purple-900 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-purple-700" />
+                <span>Filtrar por Data da Vistoria</span>
+              </label>
               {searchDate && (
                 <button
                   onClick={() => setSearchDate('')}
-                  className="text-[11px] text-purple-700 hover:underline font-normal"
+                  className="text-[11px] text-purple-700 hover:text-purple-900 hover:underline font-semibold cursor-pointer"
                 >
                   Limpar Data
                 </button>
               )}
-            </label>
+            </div>
             <div className="relative">
               <input
                 type="date"
                 value={searchDate}
                 onChange={(e) => setSearchDate(e.target.value)}
-                className="w-full px-3 py-2 bg-purple-50/50 border border-purple-200 rounded-xl text-xs sm:text-sm text-purple-950 focus:outline-none focus:ring-2 focus:ring-purple-600 font-medium"
+                className="w-full px-3 py-2.5 bg-purple-50/50 border border-purple-200 rounded-xl text-xs sm:text-sm text-purple-950 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white font-medium transition-all"
               />
             </div>
           </div>
 
-          {/* Block Selector */}
-          <div className="md:col-span-3">
-            <label className="block text-xs font-bold text-purple-900 mb-1">
-              Bloco
-            </label>
-            <select
-              value={selectedBlock}
-              onChange={(e) => setSelectedBlock(e.target.value as any)}
-              className="w-full py-2 px-3 bg-purple-50/50 border border-purple-200 rounded-xl text-xs sm:text-sm text-purple-950 focus:outline-none focus:ring-2 focus:ring-purple-600 font-medium"
-            >
-              <option value="ALL">Todos os Blocos</option>
-              <option value="A">Bloco A</option>
-              <option value="B">Bloco B</option>
-              <option value="E">Bloco E</option>
-            </select>
-          </div>
-
         </div>
 
-        {/* Quick Status Buttons */}
-        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-purple-100 text-xs">
-          <span className="text-gray-500 font-medium flex items-center gap-1">
-            <Filter className="w-3.5 h-3.5 text-purple-600" /> Filtrar Status:
-          </span>
-
-          <button
-            onClick={() => setStatusFilter('ALL')}
-            className={`px-3 py-1 rounded-full border transition-all ${
-              statusFilter === 'ALL'
-                ? 'bg-purple-900 text-white border-purple-900 font-bold'
-                : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'
-            }`}
-          >
-            Todas as Vistorias ({historyList.length})
-          </button>
-
-          <button
-            onClick={() => setStatusFilter('WITH_SIM')}
-            className={`px-3 py-1 rounded-full border transition-all ${
-              statusFilter === 'WITH_SIM'
-                ? 'bg-amber-600 text-white border-amber-600 font-bold'
-                : 'bg-white text-amber-800 border-amber-200 hover:bg-amber-50'
-            }`}
-          >
-            Com Reparos SIM
-          </button>
-
-          <button
-            onClick={() => setStatusFilter('ALL_OK')}
-            className={`px-3 py-1 rounded-full border transition-all ${
-              statusFilter === 'ALL_OK'
-                ? 'bg-emerald-700 text-white border-emerald-700 font-bold'
-                : 'bg-white text-emerald-800 border-emerald-200 hover:bg-emerald-50'
-            }`}
-          >
-            Sem Reparos (Tudo OK)
-          </button>
-
-          {(searchApt || searchDate || selectedBlock !== 'ALL' || statusFilter !== 'ALL') && (
+        {/* Clear Filters Indicator */}
+        {(searchApt || searchDate) && (
+          <div className="pt-2 border-t border-purple-100 flex items-center justify-between text-xs">
+            <span className="text-gray-500 font-medium">
+              Filtro ativo: {searchApt ? `Apartamento "${searchApt}"` : ''} {searchApt && searchDate ? ' • ' : ''} {searchDate ? `Data ${searchDate.split('-').reverse().join('/')}` : ''}
+            </span>
             <button
               onClick={() => {
                 setSearchApt('');
                 setSearchDate('');
-                setSelectedBlock('ALL');
-                setStatusFilter('ALL');
               }}
-              className="ml-auto text-purple-700 hover:text-purple-900 font-semibold underline flex items-center gap-1"
+              className="text-purple-700 hover:text-purple-900 font-semibold underline flex items-center gap-1 cursor-pointer"
             >
-              <RefreshCw className="w-3 h-3" /> Limpar Filtros de Pesquisa
+              <RefreshCw className="w-3 h-3" /> Limpar Filtros
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Results List */}
@@ -265,11 +234,11 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
             <p className="text-xs text-gray-600 mt-1">
               {historyList.length === 0
                 ? 'Acesse a planilha de um apartamento e clique em "Finalizar Vistoria" para salvar a planilha permanentemente no banco de dados.'
-                : 'Tente alterar os termos de pesquisa ou limpar os filtros para visualizar os registros.'}
+                : 'Tente alterar os termos de pesquisa por apartamento ou data para visualizar os registros.'}
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredList.map((item) => {
               const formattedDate = item.finalizedAt
                 ? new Date(item.finalizedAt).toLocaleDateString('pt-BR', {
@@ -280,6 +249,14 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
                     minute: '2-digit'
                   })
                 : `${item.inspectionDate} às ${item.inspectionTime}`;
+
+              // Extract all items that have either a written observation or status = 'sim'
+              const recordedServices = getInspectionItems(item.items).filter(
+                it => (it.observation && it.observation.trim().length > 0) || it.status === 'sim'
+              );
+
+              const isExpanded = !!expandedCards[item.id];
+              const visibleServices = isExpanded ? recordedServices : recordedServices.slice(0, 2);
 
               return (
                 <div
@@ -311,64 +288,147 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
                       </div>
                     </div>
 
-                    {/* Date & Inspector info */}
-                    <div className="space-y-1.5 text-xs text-gray-700 mb-4 bg-purple-50/50 p-2.5 rounded-xl border border-purple-100">
-                      <div className="flex items-center gap-2 font-medium">
-                        <Calendar className="w-3.5 h-3.5 text-purple-700" />
+                    {/* Metadata Box: Date, Inspector, Status, Keys */}
+                    <div className="grid grid-cols-2 gap-2 text-xs text-gray-700 mb-3 bg-purple-50/50 p-2.5 rounded-xl border border-purple-100">
+                      <div className="flex items-center gap-1.5 font-medium col-span-2">
+                        <Calendar className="w-3.5 h-3.5 text-purple-700 shrink-0" />
                         <span>Data: <strong className="text-gray-900">{formattedDate}</strong></span>
                       </div>
-                      <div className="flex items-center gap-2 font-medium">
-                        <User className="w-3.5 h-3.5 text-purple-700" />
+                      <div className="flex items-center gap-1.5 font-medium col-span-2">
+                        <User className="w-3.5 h-3.5 text-purple-700 shrink-0" />
                         <span>Vistoriador: <strong className="text-gray-900">{item.inspectorName || 'Não informado'}</strong></span>
+                      </div>
+                      <div className="flex items-center gap-1.5 font-medium">
+                        <Home className="w-3.5 h-3.5 text-purple-700 shrink-0" />
+                        <span>Status: </span>
+                        {item.occupancyStatus ? (
+                          <span className={`font-bold px-1.5 py-0.2 rounded text-[10px] uppercase tracking-wide ${
+                            item.occupancyStatus === 'ocupado'
+                              ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                              : 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                          }`}>
+                            {item.occupancyStatus}
+                          </span>
+                        ) : (
+                          <span className="text-gray-500 italic">N/I</span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1.5 font-medium">
+                        <Key className="w-3.5 h-3.5 text-purple-700 shrink-0" />
+                        <span>Chaves: <strong className="text-purple-950 font-semibold">{item.keyCount || 'N/I'}</strong></span>
                       </div>
                     </div>
 
-                    {/* Items Summary Badges */}
-                    <div className="flex items-center gap-2 mb-4 text-xs font-bold">
-                      <span className={`px-2.5 py-1 rounded-lg border flex items-center gap-1 ${
-                        item.simCount > 0
-                          ? 'bg-amber-100 text-amber-900 border-amber-300'
-                          : 'bg-gray-100 text-gray-600 border-gray-200'
-                      }`}>
-                        <AlertTriangle className="w-3 h-3" />
-                        {item.simCount} SIM (Reparo)
-                      </span>
+                    {/* SECTION: SERVIÇOS E OBSERVAÇÕES ESCRITAS */}
+                    <div className="border-t border-purple-100 pt-3 mb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
+                          <Wrench className="w-3.5 h-3.5 text-purple-700" />
+                          <span>Serviços / Observações Anotadas</span>
+                        </span>
+                        <span className="text-[11px] font-semibold bg-purple-100 text-purple-900 px-2 py-0.5 rounded-full">
+                          {recordedServices.length} {recordedServices.length === 1 ? 'item' : 'itens'}
+                        </span>
+                      </div>
 
-                      <span className="bg-emerald-100 text-emerald-900 border border-emerald-300 px-2.5 py-1 rounded-lg flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-700" />
-                        {item.naoCount} NÃO (OK)
-                      </span>
+                      {recordedServices.length === 0 ? (
+                        <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-2.5 text-xs text-emerald-800 font-medium flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span>Nenhum serviço ou reparo anotado (100% OK).</span>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {visibleServices.map((srv, idx) => {
+                            return (
+                              <div
+                                key={idx}
+                                className={`p-2.5 rounded-xl border text-xs transition-all ${
+                                  srv.status === 'sim'
+                                    ? 'bg-amber-50/70 border-amber-200 text-amber-950'
+                                    : 'bg-purple-50/40 border-purple-200 text-gray-800'
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-1 mb-1">
+                                  <div className="font-bold text-gray-900">
+                                    <span className="text-[10px] text-purple-700 uppercase tracking-wider block font-semibold">
+                                      {srv.category}
+                                    </span>
+                                    {srv.name}
+                                  </div>
+
+                                  <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                                    srv.status === 'sim'
+                                      ? 'bg-amber-200 text-amber-900 border border-amber-300'
+                                      : 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                                  }`}>
+                                    {srv.status === 'sim' ? 'SIM (Reparo)' : 'NÃO (OK)'}
+                                  </span>
+                                </div>
+
+                                {srv.observation ? (
+                                  <div className="bg-white/80 border border-purple-100 rounded-lg p-2 mt-1 text-gray-800 italic font-medium flex items-start gap-1.5">
+                                    <MessageSquareText className="w-3.5 h-3.5 text-purple-600 shrink-0 mt-0.5" />
+                                    <span className="leading-tight">
+                                      "{srv.observation}"
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span className="text-[11px] text-amber-800 italic block mt-0.5">
+                                    Marcado para reparo sem texto adicional
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+
+                          {/* Toggle Expand / Collapse */}
+                          {recordedServices.length > 2 && (
+                            <button
+                              onClick={() => toggleExpandCard(item.id)}
+                              className="w-full py-1 px-2 text-center text-xs text-purple-700 hover:text-purple-900 font-bold bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer border border-purple-200"
+                            >
+                              {isExpanded ? (
+                                <>
+                                  <ChevronUp className="w-3.5 h-3.5" />
+                                  <span>Recolher serviços</span>
+                                </>
+                              ) : (
+                                <>
+                                  <ChevronDown className="w-3.5 h-3.5" />
+                                  <span>Ver todos os {recordedServices.length} serviços anotados</span>
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
 
-                    {item.generalNotes && (
-                      <p className="text-xs text-gray-600 italic bg-gray-50 p-2 rounded-lg border border-gray-200 mb-4 line-clamp-2">
-                        "{item.generalNotes}"
-                      </p>
-                    )}
                   </div>
 
                   {/* Actions Footer */}
-                  <div className="pt-3 border-t border-purple-100 flex flex-wrap items-center justify-between gap-2">
+                  <div className="pt-3 border-t border-purple-100 flex items-center justify-between gap-2">
                     <button
                       onClick={() => onSelectHistoricalInspection(item)}
-                      className="flex-1 px-3 py-2 bg-purple-900 hover:bg-purple-800 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors shadow-xs"
+                      className="flex-1 px-3 py-2 bg-purple-100 hover:bg-purple-200 text-purple-900 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors border border-purple-200 cursor-pointer"
+                      title="Visualizar a planilha arquivada desta vistoria (somente leitura)"
                     >
-                      <Eye className="w-3.5 h-3.5" />
-                      <span>Ver Planilha</span>
+                      <Eye className="w-3.5 h-3.5 text-purple-700" />
+                      <span>Ver Vistoria</span>
                     </button>
 
                     <button
                       onClick={() => onCreateNewForApartment(item.apartmentId)}
-                      className="px-3 py-2 bg-purple-50 hover:bg-purple-100 text-purple-900 font-bold rounded-xl text-xs flex items-center justify-center gap-1 transition-colors border border-purple-200"
-                      title="Criar nova planilha de vistoria para o mesmo apartamento com outra data"
+                      className="flex-1 px-3 py-2 bg-purple-900 hover:bg-purple-800 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors shadow-xs cursor-pointer"
+                      title="Gerar uma nova planilha zerada para nova vistoria deste apartamento"
                     >
-                      <PlusCircle className="w-3.5 h-3.5 text-purple-700" />
+                      <PlusCircle className="w-3.5 h-3.5 text-amber-300" />
                       <span>Nova Vistoria</span>
                     </button>
 
                     <button
                       onClick={() => handleDeleteClick(item.id, item.apartmentId, formattedDate)}
-                      className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-200 cursor-pointer"
+                      className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xl transition-colors border border-transparent hover:border-red-200 cursor-pointer"
                       title="Excluir este registro do banco de dados"
                     >
                       <Trash2 className="w-4 h-4" />

@@ -5,9 +5,9 @@ interface HeaderProps {
   totalApartments: number;
   generatedCount: number;
   simCountTotal: number;
-  activeView: 'search' | 'dashboard' | 'spreadsheet' | 'history';
-  setActiveView: (view: 'search' | 'dashboard' | 'spreadsheet' | 'history') => void;
-  selectedAptId: string | null;
+  activeView: 'search' | 'dashboard' | 'spreadsheet' | 'history' | 'quick-fix';
+  setActiveView: (view: 'search' | 'dashboard' | 'spreadsheet' | 'history' | 'quick-fix') => void;
+  selectedAptId?: string | null;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -16,7 +16,6 @@ export const Header: React.FC<HeaderProps> = ({
   simCountTotal,
   activeView,
   setActiveView,
-  selectedAptId
 }) => {
   return (
     <header className="bg-gradient-to-r from-purple-900 via-purple-800 to-indigo-900 text-white shadow-lg border-b-4 border-purple-500 print:hidden">
@@ -76,23 +75,23 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Navigation Buttons */}
+          {/* Navigation Buttons: Pesquisa, Banco de Vistoria, Relatório Geral */}
           <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
             <button
               onClick={() => setActiveView('search')}
-              className={`px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
-                activeView === 'search'
+              className={`px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer ${
+                activeView === 'search' || activeView === 'quick-fix' || activeView === 'spreadsheet'
                   ? 'bg-white text-purple-900 font-bold shadow'
                   : 'bg-purple-800/80 hover:bg-purple-700 text-purple-100'
               }`}
             >
               <Building2 className="w-4 h-4" />
-              <span>Pesquisar / Lista</span>
+              <span>Pesquisar</span>
             </button>
 
             <button
               onClick={() => setActiveView('history')}
-              className={`px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+              className={`px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer ${
                 activeView === 'history'
                   ? 'bg-white text-purple-900 font-bold shadow'
                   : 'bg-purple-800/80 hover:bg-purple-700 text-purple-100'
@@ -102,23 +101,9 @@ export const Header: React.FC<HeaderProps> = ({
               <span>Banco de Vistorias</span>
             </button>
 
-            {selectedAptId && (
-              <button
-                onClick={() => setActiveView('spreadsheet')}
-                className={`px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
-                  activeView === 'spreadsheet'
-                    ? 'bg-white text-purple-900 font-bold shadow'
-                    : 'bg-purple-800/80 hover:bg-purple-700 text-purple-100'
-                }`}
-              >
-                <FileSpreadsheet className="w-4 h-4 text-purple-600" />
-                <span>Planilha {selectedAptId}</span>
-              </button>
-            )}
-
             <button
               onClick={() => setActiveView('dashboard')}
-              className={`px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 ${
+              className={`px-3.5 py-2 text-xs sm:text-sm font-medium rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer ${
                 activeView === 'dashboard'
                   ? 'bg-white text-purple-900 font-bold shadow'
                   : 'bg-purple-800/80 hover:bg-purple-700 text-purple-100'

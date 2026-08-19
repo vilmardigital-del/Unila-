@@ -17,13 +17,18 @@ export function loadFinalizedInspections(): FinalizedInspection[] {
 export function saveFinalizedInspection(inspection: FinalizedInspection): FinalizedInspection[] {
   try {
     const currentList = loadFinalizedInspections();
-    // Check if updating existing record or inserting new
-    const index = currentList.findIndex(item => item.id === inspection.id);
+    // Check if updating existing record by id OR by (apartmentId + inspectionDate) to avoid duplicate dates
+    const index = currentList.findIndex(
+      item =>
+        item.id === inspection.id ||
+        (item.apartmentId.toUpperCase() === inspection.apartmentId.toUpperCase() &&
+          item.inspectionDate === inspection.inspectionDate)
+    );
     let updatedList: FinalizedInspection[];
     
     if (index >= 0) {
       updatedList = [...currentList];
-      updatedList[index] = inspection;
+      updatedList[index] = { ...inspection, id: currentList[index].id };
     } else {
       updatedList = [inspection, ...currentList]; // newest first
     }

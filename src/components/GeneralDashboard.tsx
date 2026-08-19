@@ -50,22 +50,24 @@ export const GeneralDashboard: React.FC<GeneralDashboardProps> = ({
   });
 
   apartments.forEach(apt => {
-    if (apt.isGenerated) generatedCount++;
+    if (apt.isGenerated && apt.status !== 'finalizada') {
+      generatedCount++;
 
-    let aptHasSim = false;
-    (Object.entries(apt.items || {}) as [string, InspectionItemState][]).forEach(([itemKey, itemState]) => {
-      if (itemState.status === 'sim') {
-        aptHasSim = true;
-        totalSimItems++;
-        if (itemIssueCounts[itemKey]) {
-          itemIssueCounts[itemKey].count++;
+      let aptHasSim = false;
+      (Object.entries(apt.items || {}) as [string, InspectionItemState][]).forEach(([itemKey, itemState]) => {
+        if (itemState.status === 'sim') {
+          aptHasSim = true;
+          totalSimItems++;
+          if (itemIssueCounts[itemKey]) {
+            itemIssueCounts[itemKey].count++;
+          }
+        } else if (itemState.status === 'nao') {
+          totalNaoItems++;
         }
-      } else if (itemState.status === 'nao') {
-        totalNaoItems++;
-      }
-    });
+      });
 
-    if (aptHasSim) apartmentsWithSim++;
+      if (aptHasSim) apartmentsWithSim++;
+    }
   });
 
   // Top issues sorted
@@ -75,13 +77,14 @@ export const GeneralDashboard: React.FC<GeneralDashboardProps> = ({
 
   // Filtered list for table
   const filteredList = apartments.filter(apt => {
+    if (apt.status === 'finalizada') return false;
     if (blockFilter !== 'ALL' && apt.block !== blockFilter) return false;
     if (searchTerm) {
       const matchId = apt.apartmentId.toLowerCase().includes(searchTerm.toLowerCase());
       const matchInspector = (apt.inspectorName || '').toLowerCase().includes(searchTerm.toLowerCase());
       if (!matchId && !matchInspector) return false;
     }
-    return true;
+    return apt.isGenerated;
   });
 
   return (

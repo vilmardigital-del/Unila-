@@ -19,7 +19,8 @@ import {
   Lock,
   Unlock,
   AlertTriangle,
-  Trash2
+  Trash2,
+  Save
 } from 'lucide-react';
 import { ApartmentInspection, MaintenanceChoice, InspectionItemState, FinalizedInspection } from '../types';
 import { MAINTENANCE_CATEGORIES, COMMON_OBSERVATION_SUGGESTIONS } from '../data/categories';
@@ -45,11 +46,28 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
 }) => {
   const [activeObservationField, setActiveObservationField] = useState<string | null>(null);
   const [showSavedToast, setShowSavedToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('Alterações Salvas!');
   const [showFinalizedModal, setShowFinalizedModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [isLocked, setIsLocked] = useState<boolean>(false);
-  const [manuallyUnlocked, setManuallyUnlocked] = useState<boolean>(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  // Directly check if spreadsheet is locked / saved / finalized
+  const isLocked = Boolean(apartment.isSaved || apartment.isLocked || apartment.status === 'finalizada');
+
+  // Save spreadsheet and permanently lock from direct open modification (only modifiable via Reparos)
+  const handleSaveSpreadsheet = () => {
+    const updatedApt: ApartmentInspection = {
+      ...apartment,
+      isGenerated: true,
+      isSaved: true,
+      isLocked: true,
+      updatedAt: new Date().toISOString()
+    };
+    onUpdateApartment(updatedApt);
+    setToastMessage('Planilha Salva com Sucesso! Modificações apenas pelo botão Reparos.');
+    setShowSavedToast(true);
+    setTimeout(() => setShowSavedToast(false), 3000);
+  };
 
   // Calculate totals
   let totalCount = 0;
@@ -66,13 +84,6 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
 
   const progressPercent = totalCount > 0 ? Math.round(((simCount + naoCount) / totalCount) * 100) : 0;
   const is100Percent = totalCount > 0 && pendingCount === 0;
-
-  // Auto-lock when 100% is reached unless user explicitly clicked "Editar"
-  useEffect(() => {
-    if (is100Percent && !manuallyUnlocked) {
-      setIsLocked(true);
-    }
-  }, [is100Percent, manuallyUnlocked]);
 
   // Helper to update a specific item status or observation
   const handleItemChange = (itemKey: string, field: 'status' | 'observation', value: any) => {
@@ -94,6 +105,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
     };
 
     onUpdateApartment(updatedApt);
+    setToastMessage('Alterações Salvas Automaticamente!');
     triggerSavedToast();
   };
 
@@ -184,6 +196,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
       number: apartment.number,
       floor: apartment.floor,
       inspectorName: apartment.inspectorName || 'Técnico Unila',
+      occupancyStatus: apartment.occupancyStatus,
       keyCount: apartment.keyCount,
       finalizedAt: isoString,
       inspectionDate: dateStr,
@@ -198,12 +211,14 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
 
     onUpdateApartment({
       ...apartment,
+      isGenerated: false,
+      isSaved: true,
+      isLocked: true,
       status: 'finalizada',
       finalizedAt: isoString,
       updatedAt: isoString
     });
 
-    setIsLocked(true); // Automatically lock upon finalization
     setShowFinalizedModal(true);
   };
 
@@ -211,10 +226,8 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
   const handleDeleteSpreadsheet = () => {
     if (apartment.status === 'finalizada' || apartment.finalizedAt) {
       const historyList = loadFinalizedInspections();
-      const match = historyList.find(h => h.apartmentId === apartment.apartmentId);
-      if (match) {
-        deleteFinalizedInspection(match.id);
-      }
+      const matches = historyList.filter(h => h.apartmentId === apartment.apartmentId);
+      matches.forEach(m => deleteFinalizedInspection(m.id));
     }
     if (onDeleteApartmentSheet) {
       onDeleteApartmentSheet(apartment.apartmentId);
@@ -240,37 +253,22 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
 
         {/* Lock Banner / Finalized Banner Warning */}
         {apartment.status === 'finalizada' ? (
-          <div className="bg-emerald-50 border-b-2 border-emerald-300 px-4 py-2.5 text-emerald-950 text-xs font-bold flex flex-col sm:flex-row items-center justify-between gap-2 print:hidden">
+          <div className="bg-emerald-900 text-emerald-100 border-b-2 border-emerald-700 px-4 py-3 text-xs font-bold flex items-center justify-between gap-2 print:hidden shadow-inner">
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-700 shrink-0" />
-              <span>Esta vistoria foi <strong>finalizada</strong> e arquivada com sucesso no banco de dados para consultas futuras.</span>
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>
+                Vistoria <strong>Finalizada (Apenas Visualização)</strong>: Esta planilha foi arquivada no banco de dados. Não é permitida nova edição nem novos salvamentos nesta data para não duplicar registros.
+              </span>
             </div>
-            {onStartNewInspection && (
-              <button
-                onClick={() => onStartNewInspection(apartment.apartmentId)}
-                className="px-3 py-1.5 bg-purple-900 hover:bg-purple-800 text-white font-extrabold rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition-colors shrink-0 cursor-pointer"
-                title="Criar uma nova planilha zerada para este apartamento"
-              >
-                <PlusCircle className="w-3.5 h-3.5 text-amber-300" />
-                <span>Gerar Nova Planilha (Nova Verificação)</span>
-              </button>
-            )}
           </div>
         ) : isLocked ? (
-          <div className="bg-amber-100 border-b-2 border-amber-300 px-4 py-2.5 text-amber-950 text-xs font-bold flex items-center justify-between gap-2 print:hidden">
+          <div className="bg-purple-900 text-purple-100 border-b-2 border-purple-700 px-4 py-3 text-xs font-bold flex flex-col sm:flex-row items-center justify-between gap-3 print:hidden shadow-inner">
             <div className="flex items-center gap-2">
-              <Lock className="w-4 h-4 text-amber-800 shrink-0" />
-              <span>Planilha salva e protegida contra edições. Para realizar alterações, clique no botão <strong>"Editar"</strong>.</span>
+              <Lock className="w-4 h-4 text-amber-300 shrink-0" />
+              <span>
+                Planilha <strong>Salva e Bloqueada</strong>: Esta planilha não pode mais ser modificada aberta. Qualquer alteração de status (SIM/NÃO) só poderá ser feita através do botão <strong>"Reparos"</strong> na tela inicial.
+              </span>
             </div>
-            <button
-              onClick={() => {
-                setManuallyUnlocked(true);
-                setIsLocked(false);
-              }}
-              className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-extrabold rounded-lg text-[11px] transition-colors shrink-0"
-            >
-              Habilitar Edição
-            </button>
           </div>
         ) : null}
 
@@ -318,8 +316,19 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                 </div>
               </div>
 
-              {/* Botões Exportar Excel e Imprimir dentro do processo de vistoria */}
-              <div className="flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 sm:border-l border-purple-700/60 sm:pl-4 w-full sm:w-auto justify-end">
+              {/* Botões Exportar Excel, Imprimir e Salvar Planilha */}
+              <div className="flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 sm:border-l border-purple-700/60 sm:pl-4 w-full sm:w-auto justify-end flex-wrap">
+                {!isLocked && (
+                  <button
+                    onClick={handleSaveSpreadsheet}
+                    className="px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-purple-950 font-black rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                    title="Salvar planilha e bloquear edição aberta (modificações futuras apenas pelo botão Reparos)"
+                  >
+                    <Save className="w-3.5 h-3.5 text-purple-900" />
+                    <span>Salvar Planilha</span>
+                  </button>
+                )}
+
                 <button
                   onClick={() => exportSingleApartmentToCSV(apartment)}
                   className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
@@ -666,14 +675,19 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
           <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-center sm:justify-end">
             {apartment.status === 'finalizada' ? (
               <>
+                <div className="flex items-center gap-2 text-xs font-bold text-emerald-950 bg-emerald-100 px-4 py-2.5 rounded-xl border border-emerald-300">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+                  <span>Vistoria Finalizada (Apenas Visualização)</span>
+                </div>
+
                 {onStartNewInspection && (
                   <button
                     onClick={() => onStartNewInspection(apartment.apartmentId)}
-                    className="px-5 py-2.5 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95 cursor-pointer"
-                    title="Criar nova planilha zerada para nova vistoria/verificação deste apartamento"
+                    className="px-4 py-2.5 bg-purple-900 hover:bg-purple-800 text-white font-bold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer"
+                    title="Criar nova planilha para uma nova vistoria deste apartamento em uma nova data"
                   >
                     <PlusCircle className="w-4 h-4 text-amber-300" />
-                    <span>Gerar Nova Planilha (Nova Verificação)</span>
+                    <span>Nova Vistoria (Nova Data)</span>
                   </button>
                 )}
 
@@ -687,27 +701,33 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                   </button>
                 )}
               </>
+            ) : isLocked ? (
+              <>
+                <div className="flex items-center gap-2 text-xs font-bold text-purple-900 bg-purple-100 px-4 py-2.5 rounded-xl border border-purple-300">
+                  <Lock className="w-4 h-4 text-purple-700" />
+                  <span>Planilha Salva (Modificações apenas via botão Reparos)</span>
+                </div>
+
+                {/* Botão Finalizar Vistoria */}
+                <button
+                  onClick={handleFinalize}
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95 border border-emerald-500 cursor-pointer"
+                  title="Finalizar esta vistoria e armazenar no banco de dados"
+                >
+                  <FileCheck className="w-4 h-4 text-emerald-100" />
+                  <span>Finalizar Vistoria</span>
+                </button>
+              </>
             ) : (
               <>
-                {/* Botão Editar (Habilitar Edição para Adicionar Solução) */}
+                {/* Botão Salvar Planilha */}
                 <button
-                  onClick={() => {
-                    if (isLocked) {
-                      setManuallyUnlocked(true);
-                      setIsLocked(false);
-                    } else {
-                      setIsLocked(true);
-                    }
-                  }}
-                  className={`px-5 py-2.5 font-extrabold rounded-xl text-xs sm:text-sm flex items-center gap-2 transition-all shadow-md active:scale-95 cursor-pointer ${
-                    !isLocked
-                      ? 'bg-amber-600 text-white ring-2 ring-amber-300'
-                      : 'bg-amber-500 hover:bg-amber-600 text-white shadow-lg animate-pulse'
-                  }`}
-                  title="Liberar planilha para editar e adicionar solução"
+                  onClick={handleSaveSpreadsheet}
+                  className="px-6 py-2.5 bg-purple-900 hover:bg-purple-800 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95 border border-purple-700 cursor-pointer"
+                  title="Salvar planilha (após salvar, ela não poderá mais ser modificada aberta, apenas via botão Reparos)"
                 >
-                  {isLocked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-                  <span>{isLocked ? 'Editar (Adicionar Solução)' : 'Edição Liberada'}</span>
+                  <Save className="w-4 h-4 text-amber-300" />
+                  <span>Salvar Planilha</span>
                 </button>
 
                 {/* Botão Finalizar Vistoria */}
@@ -847,7 +867,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
       {showSavedToast && (
         <div className="fixed bottom-4 right-4 bg-purple-900 text-white text-xs font-bold px-4 py-2.5 rounded-xl shadow-2xl border border-purple-400 flex items-center gap-2 z-50 animate-bounce">
           <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          <span>{isLocked ? 'Planilha Bloqueada para Edição!' : 'Alterações Salvas Automaticamente!'}</span>
+          <span>{toastMessage}</span>
         </div>
       )}
 

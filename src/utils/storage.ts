@@ -1,5 +1,6 @@
 import { ApartmentInspection } from '../types';
 import { generateAllApartments, createEmptyItemsMap } from '../data/apartments';
+import { loadFinalizedInspections } from './historyStorage';
 
 const STORAGE_KEY = 'unila_vistorias_v1';
 const SETTINGS_KEY = 'unila_settings_v1';
@@ -29,11 +30,20 @@ export function loadStoredApartments(): { apartments: ApartmentInspection[]; set
     }
 
     const savedMap: Record<string, Partial<ApartmentInspection>> = JSON.parse(rawData);
+    
+    // Check finalized inspections in history database
+    const finalizedHistory = loadFinalizedInspections();
+    const finalizedIds = new Set(finalizedHistory.map(h => h.apartmentId));
 
     // Merge saved inspection states into default structure to maintain clean schema
     const mergedApartments = baseApartments.map(baseApt => {
       const saved = savedMap[baseApt.apartmentId];
       if (!saved) return baseApt;
+
+      // If marked finalized in local storage but deleted from database, clean up completely
+      if (saved.status === 'finalizada' && !finalizedIds.has(baseApt.apartmentId)) {
+        return baseApt;
+      }
 
       // Merge items ensuring new items aren't lost
       const baseItems = createEmptyItemsMap();
@@ -48,10 +58,13 @@ export function loadStoredApartments(): { apartments: ApartmentInspection[]; set
         });
       }
 
+      // If status is finalized, active generated state is false (it's archived in DB)
+      const isActuallyGenerated = saved.status === 'finalizada' ? false : (saved.isGenerated ?? false);
+
       return {
         ...baseApt,
         ...saved,
-        isGenerated: saved.isGenerated ?? (settings.allGenerated || false),
+        isGenerated: isActuallyGenerated,
         items: baseItems
       };
     });

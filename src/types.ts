@@ -16,6 +16,8 @@ export interface ApartmentInspection {
   number: string; // e.g., '001', '101'
   floor: 'Térreo' | '1º Andar' | '2º Andar';
   isGenerated: boolean;
+  isSaved?: boolean;
+  isLocked?: boolean;
   updatedAt?: string;
   inspectorName?: string;
   keyCount?: '1 chave' | '2 chave' | '3 chave' | '4 chave' | '5 chave';
@@ -32,6 +34,7 @@ export interface FinalizedInspection {
   number: string;
   floor: 'Térreo' | '1º Andar' | '2º Andar';
   inspectorName?: string;
+  occupancyStatus?: 'ocupado' | 'desocupado';
   keyCount?: '1 chave' | '2 chave' | '3 chave' | '4 chave' | '5 chave';
   finalizedAt: string; // ISO String timestamp
   inspectionDate: string; // YYYY-MM-DD
