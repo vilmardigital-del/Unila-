@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Header } from './components/Header';
 import { ApartmentCard } from './components/ApartmentCard';
+import { CompactApartmentTable } from './components/CompactApartmentTable';
 import { ApartmentSpreadsheet } from './components/ApartmentSpreadsheet';
 import { GeneralDashboard } from './components/GeneralDashboard';
 import { InspectionHistory } from './components/InspectionHistory';
@@ -361,8 +362,8 @@ export default function App() {
       });
     }
 
-    // When not searching: show active generated sheets that are not finalized
-    return apartments.filter(apt => apt.isGenerated && apt.status !== 'finalizada');
+    // When not searching: keep list hidden so spreadsheet info is only shown when searched
+    return [];
   }, [apartments, searchTerm]);
 
   const activeApartment = useMemo(() => {
@@ -398,32 +399,27 @@ export default function App() {
             <SearchAndGenerator
               searchTerm={searchTerm}
               setSearchTerm={setSearchTerm}
-              onGenerateFiltered={() => handleOpenGenerationModal('FILTERED')}
-              onOpenQuickFixSearch={(term) => handleOpenRepairsForApartment(term)}
               filteredCount={filteredApartments.length}
-              totalApartments={totalApartments}
             />
 
-            {/* Apartment Cards Grid */}
-            {(generatedCount > 0 || searchTerm || selectedBlock !== 'ALL' || selectedFloor !== 'ALL') && (
+            {/* Apartment Cards Grid - Only displayed when searched by apartment number */}
+            {searchTerm.trim().length > 0 ? (
               <div>
                 <div className="flex items-center justify-between mb-4 px-1">
                   <h3 className="text-sm font-bold text-purple-950 flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-purple-700" />
                     <span>
-                      {filteredApartments.length} Planilha{filteredApartments.length === 1 ? '' : 's'}
-                      {searchTerm ? ` para "${searchTerm}"` : ''}
-                      {selectedBlock !== 'ALL' ? ` (Bloco ${selectedBlock})` : ''}
+                      {filteredApartments.length} Resultado{filteredApartments.length === 1 ? '' : 's'} para "{searchTerm.toUpperCase()}"
                     </span>
                   </h3>
                   <span className="text-xs text-gray-500 font-medium">
-                    Exibindo vistorias dos Blocos A, B e E
+                    Exibindo apartamentos dos Blocos A, B e E
                   </span>
                 </div>
 
                 {filteredApartments.length === 0 ? (
                   <div className="bg-white rounded-2xl p-8 text-center border border-purple-100 text-gray-500 text-sm">
-                    Nenhum apartamento encontrado para os filtros selecionados. Tente buscar por "A001", "B102" ou "E205".
+                    Nenhum apartamento encontrado para "{searchTerm}". Tente buscar por "A001", "B102" ou "E205".
                   </div>
                 ) : (
                   <div className="flex flex-col gap-4">
@@ -441,6 +437,8 @@ export default function App() {
                   </div>
                 )}
               </div>
+            ) : (
+              <CompactApartmentTable apartments={apartments} onSelectApartment={handleSelectApartment} />
             )}
 
           </div>

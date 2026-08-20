@@ -3,6 +3,7 @@ import {
   FileSpreadsheet,
   Printer,
   Download,
+  FileText,
   ArrowLeft,
   CheckCircle2,
   XCircle,
@@ -17,6 +18,8 @@ import {
   History,
   FolderCheck,
   Lock,
+  ChevronDown,
+  ChevronUp,
   Unlock,
   AlertTriangle,
   Trash2,
@@ -45,26 +48,36 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
   onStartNewInspection
 }) => {
   const [activeObservationField, setActiveObservationField] = useState<string | null>(null);
+  const [expandedRows, setExpandedRows] = useState<string[]>([]);
   const [showSavedToast, setShowSavedToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('Alterações Salvas!');
   const [showFinalizedModal, setShowFinalizedModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  // Directly check if spreadsheet is locked / saved / finalized
-  const isLocked = Boolean(apartment.isSaved || apartment.isLocked || apartment.status === 'finalizada');
+  const toggleRow = (key: string) => {
+    setExpandedRows(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
+  };
 
-  // Save spreadsheet and permanently lock from direct open modification (only modifiable via Reparos)
+  // Save spreadsheet and permanently lock from direct open modification if 100% complete
   const handleSaveSpreadsheet = () => {
+    const is100PercentComplete = pendingCount === 0;
+    
     const updatedApt: ApartmentInspection = {
       ...apartment,
       isGenerated: true,
       isSaved: true,
-      isLocked: true,
+      isLocked: is100PercentComplete, // Lock only if 100% complete
       updatedAt: new Date().toISOString()
     };
     onUpdateApartment(updatedApt);
-    setToastMessage('Planilha Salva com Sucesso! Modificações apenas pelo botão Reparos.');
+    
+    if (is100PercentComplete) {
+      setToastMessage('Planilha Salva com Sucesso! 100% concluído, planilha bloqueada.');
+    } else {
+      setToastMessage('Planilha Salva com Sucesso! Permanece editável.');
+    }
+    
     setShowSavedToast(true);
     setTimeout(() => setShowSavedToast(false), 3000);
   };
@@ -85,10 +98,21 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
   const progressPercent = totalCount > 0 ? Math.round(((simCount + naoCount) / totalCount) * 100) : 0;
   const is100Percent = totalCount > 0 && pendingCount === 0;
 
+  // Directly check if spreadsheet is locked / finalized
+  const isLocked = Boolean(apartment.isLocked || apartment.status === 'finalizada');
+
   // Helper to update a specific item status or observation
-  const handleItemChange = (itemKey: string, field: 'status' | 'observation', value: any) => {
+  const handleItemChange = (itemKey: string, field: 'status' | 'observation', value: any, bypassValidation: boolean = false) => {
     if (isLocked) return;
     const nowStr = new Date().toISOString();
+    
+    // Check if setting to 'sim' without observation
+    if (!bypassValidation && field === 'status' && value === 'sim' && (!apartment.items[itemKey].observation || apartment.items[itemKey].observation.trim() === '')) {
+      setToastMessage('Atenção: A observação é obrigatória para itens com "SIM".');
+      triggerSavedToast();
+      return;
+    }
+
     const updatedItems = {
       ...apartment.items,
       [itemKey]: {
@@ -96,6 +120,11 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
         [field]: value
       }
     };
+
+    // Automatically set status to 'sim' if observation is filled
+    if (field === 'observation' && value && value.trim() !== '' && updatedItems[itemKey].status !== 'sim') {
+      updatedItems[itemKey].status = 'sim';
+    }
 
     const updatedApt: ApartmentInspection = {
       ...apartment,
@@ -105,7 +134,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
     };
 
     onUpdateApartment(updatedApt);
-    setToastMessage('Alterações Salvas Automaticamente!');
+    setToastMessage('Alterações Salvas!');
     triggerSavedToast();
   };
 
@@ -168,17 +197,48 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
     window.print();
   };
 
+  const handleExportPDF = () => {
+    const originalTitle = document.title;
+    document.title = `Vistoria_Apt_${apartment.apartmentId}_${new Date().toISOString().slice(0, 10)}`;
+    window.print();
+    setTimeout(() => {
+      document.title = originalTitle;
+    }, 1000);
+  };
+
+  // Extract all repairs and observations for single-line summary
+  const repairsArray: string[] = [];
+  const observationsArray: string[] = [];
+  MAINTENANCE_CATEGORIES.forEach(cat => {
+    cat.items.forEach(itemName => {
+      const key = `${cat.id}-${itemName.toLowerCase().replace(/\s+/g, '_')}`;
+      const it = apartment.items ? apartment.items[key] : null;
+      if (it?.status === 'sim') {
+        repairsArray.push(`${cat.name} (${itemName})`);
+      }
+      if (it?.observation && it.observation.trim()) {
+        observationsArray.push(`${itemName}: ${it.observation.trim()}`);
+      }
+    });
+  });
+
+  const repairsSummaryText = repairsArray.length > 0 ? repairsArray.join(' | ') : 'Nenhum reparo necessário';
+  const observationsSummaryText = observationsArray.length > 0 ? observationsArray.join(' | ') : 'Nenhuma observação informada';
+  const dateFormatted = apartment.updatedAt ? new Date(apartment.updatedAt).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR');
+
   // Finalize inspection and store in history database with strict validations
   const handleFinalize = () => {
-    // Validation: ALL items MUST be marked with 'NÃO' (zero SIM and zero pending)
-    if (naoCount < totalCount) {
-      if (simCount > 0 && pendingCount > 0) {
-        setValidationError(`A planilha só pode ser finalizada quando TODOS os itens estiverem marcados com "NÃO". Atualmente existem ${simCount} item(ns) com "SIM" (necessita reparo) e ${pendingCount} item(ns) pendente(s).`);
-      } else if (simCount > 0) {
-        setValidationError(`A planilha só pode ser finalizada quando TODOS os itens estiverem marcados com "NÃO". Atualmente existem ${simCount} item(ns) marcado(s) com "SIM" (reparos pendentes).`);
-      } else {
-        setValidationError(`A planilha só pode ser finalizada quando TODOS os itens estiverem marcados com "NÃO". Ainda restam ${pendingCount} item(ns) pendente(s) sem marcação.`);
-      }
+    // Validation: Check for missing observations for 'SIM' items
+    const missingObservations = Object.values(apartment.items || {}).filter(item => item.status === 'sim' && (!item.observation || item.observation.trim() === ''));
+    
+    if (missingObservations.length > 0) {
+      setValidationError(`Para finalizar a vistoria, todos os itens marcados com "SIM" (reparos necessários) devem ter uma observação preenchida. Existem ${missingObservations.length} item(ns) sem observação.`);
+      return;
+    }
+
+    // Validation: Still require no pending items
+    if (pendingCount > 0) {
+      setValidationError(`A planilha só pode ser finalizada quando TODOS os itens estiverem respondidos. Ainda restam ${pendingCount} item(ns) pendente(s) sem marcação.`);
       return;
     }
 
@@ -244,11 +304,31 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
       {/* Main Spreadsheet Card */}
       <div className="bg-white border-2 border-purple-800 rounded-2xl shadow-lg overflow-hidden print:border-none print:shadow-none print:rounded-none">
         
-        {/* Minimal Print Header (Appears ONLY during print) */}
-        <div className="hidden print:block text-center py-3 border-b-2 border-black mb-4">
-          <h1 className="text-2xl font-black text-black uppercase tracking-widest">
-            APARTAMENTO {apartment.apartmentId}
-          </h1>
+        {/* Printable Standardized Header & In-Line Summary Box */}
+        <div className="hidden print:block mb-4 text-black border-2 border-black p-4">
+          <div className="flex items-center justify-between border-b-2 border-black pb-2 mb-3">
+            <div>
+              <h1 className="text-xl font-black uppercase tracking-wider">UNILA - PLANILHA DE VISTORIA E MANUTENÇÃO</h1>
+              <p className="text-xs text-gray-700 font-medium">Relatório Oficial de Vistoria Predial e Reparos</p>
+            </div>
+            <div className="text-right text-xs">
+              <div className="font-bold">Data: {dateFormatted}</div>
+              <div>Vistoriador: <strong>{apartment.inspectorName || 'Não informado'}</strong></div>
+            </div>
+          </div>
+
+          {/* Resumo Geral em Linha com os 5 dados solicitados */}
+          <div className="space-y-1.5 text-xs">
+            <div className="grid grid-cols-3 gap-2 bg-gray-100 p-2 border border-gray-400 font-semibold">
+              <div><strong>Nº Apartamento:</strong> {apartment.apartmentId} (Bloco {apartment.block} • {apartment.floor})</div>
+              <div><strong>Status:</strong> {(apartment.occupancyStatus || 'Não informado').toUpperCase()}</div>
+              <div><strong>Chaves:</strong> {apartment.keyCount || 'Não informado'}</div>
+            </div>
+            <div className="border border-gray-400 p-2 bg-gray-50 space-y-1">
+              <div><strong>Reparos Realizados (SIM):</strong> <span className="font-semibold text-red-900">{repairsSummaryText}</span></div>
+              <div><strong>Observações Selecionadas:</strong> <span className="italic">{observationsSummaryText}</span></div>
+            </div>
+          </div>
         </div>
 
         {/* Lock Banner / Finalized Banner Warning */}
@@ -257,7 +337,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
               <span>
-                Vistoria <strong>Finalizada (Apenas Visualização)</strong>: Esta planilha foi arquivada no banco de dados. Não é permitida nova edição nem novos salvamentos nesta data para não duplicar registros.
+                Vistoria <strong>Finalizada (Apenas Visualização)</strong>: Esta planilha foi arquivada no banco de dados.
               </span>
             </div>
           </div>
@@ -316,36 +396,18 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                 </div>
               </div>
 
-              {/* Botões Exportar Excel, Imprimir e Salvar Planilha */}
+              {/* Botões Salvar */}
               <div className="flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 sm:border-l border-purple-700/60 sm:pl-4 w-full sm:w-auto justify-end flex-wrap">
                 {!isLocked && (
                   <button
                     onClick={handleSaveSpreadsheet}
-                    className="px-3.5 py-2 bg-amber-400 hover:bg-amber-300 text-purple-950 font-black rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                    className="px-3 py-2 bg-amber-400 hover:bg-amber-300 text-purple-950 font-black rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
                     title="Salvar planilha e bloquear edição aberta (modificações futuras apenas pelo botão Reparos)"
                   >
                     <Save className="w-3.5 h-3.5 text-purple-900" />
                     <span>Salvar Planilha</span>
                   </button>
                 )}
-
-                <button
-                  onClick={() => exportSingleApartmentToCSV(apartment)}
-                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                  title="Exportar planilha para Excel (.csv)"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Exportar Excel</span>
-                </button>
-
-                <button
-                  onClick={handlePrint}
-                  className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-                  title="Imprimir planilha de vistoria"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Imprimir</span>
-                </button>
               </div>
             </div>
           </div>
@@ -454,12 +516,15 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
             <thead>
               <tr className="bg-purple-900 text-white font-bold text-xs uppercase tracking-wider border-b-2 border-purple-950 print:bg-gray-200 print:text-black print:border-black">
                 <th className="py-3 px-3 w-12 text-center border-r border-purple-800 print:border-gray-400">#</th>
+                <th className="hidden print:table-cell py-2 px-2 w-20 border-r border-purple-800 print:border-gray-400">Nº Apt</th>
+                <th className="hidden print:table-cell py-2 px-2 w-24 border-r border-purple-800 print:border-gray-400">Status</th>
+                <th className="hidden print:table-cell py-2 px-2 w-20 border-r border-purple-800 print:border-gray-400">Chaves</th>
                 <th className="py-3 px-4 w-32 border-r border-purple-800 print:border-gray-400">Categoria</th>
                 <th className="py-3 px-4 sm:w-64 border-r border-purple-800 print:border-gray-400">Item de Manutenção</th>
                 <th className="py-3 px-4 text-center w-56 sm:w-64 border-r border-purple-800 print:border-gray-400">
-                  Serviço de Manutenção?
+                  Reparo Realizado?
                 </th>
-                <th className="py-3 px-4">Observação / Detalhes</th>
+                <th className="py-3 px-4">Observação Selecionada</th>
               </tr>
             </thead>
 
@@ -481,7 +546,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                     
                     {/* Category Divider Header Row (Excel Style) */}
                     <tr className="bg-purple-100/90 border-y-2 border-purple-300 font-bold text-purple-950 text-xs sm:text-sm print:bg-gray-100 print:text-black print:border-gray-400">
-                      <td colSpan={5} className="py-2.5 px-4 bg-purple-100 print:bg-gray-100">
+                      <td colSpan={8} className="py-2.5 px-4 bg-purple-100 print:bg-gray-100">
                         <div className="flex items-center justify-between">
                           <span className="flex items-center gap-2 text-purple-950 font-extrabold uppercase tracking-wide print:text-black">
                             <span className="w-2.5 h-2.5 rounded-full bg-purple-700 print:bg-black inline-block" />
@@ -519,7 +584,27 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                         >
                           {/* Row Index */}
                           <td className="py-2.5 px-3 text-center text-xs font-mono text-purple-800 bg-purple-50/30 border-r border-gray-200 font-semibold print:text-black print:bg-transparent">
-                            {currentCounter}
+                            <div className="flex items-center justify-center gap-1">
+                              <button onClick={() => toggleRow(itemKey)} className="text-purple-600">
+                                {expandedRows.includes(itemKey) ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>}
+                              </button>
+                              {currentCounter}
+                            </div>
+                          </td>
+
+                          {/* Print Only: Apt Number */}
+                          <td className="hidden print:table-cell py-2 px-2 font-bold text-xs text-black border-r border-gray-200">
+                            {apartment.apartmentId}
+                          </td>
+
+                          {/* Print Only: Occupancy Status */}
+                          <td className="hidden print:table-cell py-2 px-2 uppercase text-[11px] font-semibold text-black border-r border-gray-200">
+                            {apartment.occupancyStatus || '-'}
+                          </td>
+
+                          {/* Print Only: Keys */}
+                          <td className="hidden print:table-cell py-2 px-2 text-[11px] font-medium text-black border-r border-gray-200">
+                            {apartment.keyCount || '-'}
                           </td>
 
                           {/* Category Name */}
@@ -548,7 +633,16 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                               <button
                                 type="button"
                                 disabled={isLocked}
-                                onClick={() => handleItemChange(itemKey, 'status', isSim ? null : 'sim')}
+                                onClick={() => {
+                                  const newStatus = isSim ? null : 'sim';
+                                  handleItemChange(itemKey, 'status', newStatus);
+                                  if (newStatus === 'sim') {
+                                    setTimeout(() => {
+                                      const el = document.getElementById(`obs-${itemKey}`);
+                                      if (el) el.focus();
+                                    }, 50);
+                                  }
+                                }}
                                 className={`flex-1 py-1.5 px-2.5 rounded-lg font-bold text-xs border transition-all flex items-center justify-center gap-1.5 ${
                                   isSim
                                     ? 'bg-amber-500 text-white border-amber-600 shadow-sm ring-2 ring-amber-300'
@@ -578,14 +672,15 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
 
                             {/* Print Text Display */}
                             <div className="hidden print:block font-extrabold text-xs text-black uppercase">
-                              {isSim ? 'SIM' : isNao ? 'NÃO' : ''}
+                              {isSim ? 'SIM (REPARO)' : isNao ? 'NÃO (OK)' : '-'}
                             </div>
                           </td>
 
                           {/* Observation Cell */}
-                          <td className="py-2 px-3 relative">
+                          <td className={`py-2 px-3 relative ${expandedRows.includes(itemKey) ? '' : 'hidden'}`}>
                             <div className="flex items-center gap-1.5">
                               <input
+                                id={`obs-${itemKey}`}
                                 type="text"
                                 disabled={isLocked}
                                 readOnly={isLocked}
@@ -602,7 +697,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
 
                               {/* Print Observation Text */}
                               <div className="hidden print:block text-xs text-black font-normal">
-                                {itemState.observation || ''}
+                                {itemState.observation || '-'}
                               </div>
 
                               {/* Quick Note Dropdown Suggestion Trigger */}
@@ -663,21 +758,25 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
         </div>
 
         {/* Bottom Action Bar (At the end of the spreadsheet) */}
-        <div className="bg-white border border-purple-200 rounded-2xl p-4 sm:p-5 shadow-md flex flex-col sm:flex-row items-center justify-between gap-4 print:hidden">
-          <button
-            onClick={onBack}
-            className="w-full sm:w-auto px-4 py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-900 font-bold rounded-xl text-xs sm:text-sm transition-colors flex items-center justify-center gap-2 border border-purple-200 cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Voltar para Lista</span>
-          </button>
+        <div className="bg-white border border-purple-200 rounded-2xl p-4 sm:p-5 shadow-md flex flex-col lg:flex-row items-center justify-between gap-4 print:hidden">
+          <div className="flex items-center gap-2 w-full lg:w-auto">
+            <button
+              onClick={onBack}
+              className="px-4 py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-900 font-bold rounded-xl text-xs sm:text-sm transition-colors flex items-center justify-center gap-2 border border-purple-200 cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Voltar para Lista</span>
+            </button>
+          </div>
 
-          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-center sm:justify-end">
+          <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto justify-center lg:justify-end">
+            {/* Quick Export / Print Tools */}
+
             {apartment.status === 'finalizada' ? (
               <>
                 <div className="flex items-center gap-2 text-xs font-bold text-emerald-950 bg-emerald-100 px-4 py-2.5 rounded-xl border border-emerald-300">
                   <CheckCircle2 className="w-4 h-4 text-emerald-700" />
-                  <span>Vistoria Finalizada (Apenas Visualização)</span>
+                  <span>Vistoria Finalizada</span>
                 </div>
 
                 {onStartNewInspection && (
@@ -705,7 +804,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
               <>
                 <div className="flex items-center gap-2 text-xs font-bold text-purple-900 bg-purple-100 px-4 py-2.5 rounded-xl border border-purple-300">
                   <Lock className="w-4 h-4 text-purple-700" />
-                  <span>Planilha Salva (Modificações apenas via botão Reparos)</span>
+                  <span>Planilha Salva (Bloqueada)</span>
                 </div>
 
                 {/* Botão Finalizar Vistoria */}
@@ -890,7 +989,9 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
 
             <div className="flex gap-3 pt-2">
               <button
-                onClick={() => setShowDeleteModal(false)}
+                onClick={() => {
+                  setShowDeleteModal(false);
+                }}
                 className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl text-xs sm:text-sm transition-colors cursor-pointer"
               >
                 Cancelar

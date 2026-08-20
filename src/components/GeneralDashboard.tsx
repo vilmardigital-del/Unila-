@@ -108,13 +108,7 @@ export const GeneralDashboard: React.FC<GeneralDashboardProps> = ({
             </p>
           </div>
 
-          <button
-            onClick={() => exportAllApartmentsSummaryToCSV(apartments)}
-            className="px-4 py-3 bg-white text-purple-900 hover:bg-purple-50 font-extrabold text-xs sm:text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 shrink-0 active:scale-98"
-          >
-            <Download className="w-4 h-4 text-purple-700" />
-            <span>Baixar Planilha Completa Excel (.csv)</span>
-          </button>
+
         </div>
       </div>
 

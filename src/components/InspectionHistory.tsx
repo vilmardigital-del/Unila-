@@ -9,6 +9,7 @@ import {
   AlertTriangle,
   Download,
   Printer,
+  FileText,
   Eye,
   PlusCircle,
   Trash2,
@@ -26,7 +27,7 @@ import {
 } from 'lucide-react';
 import { FinalizedInspection, BuildingBlock, InspectionItemState } from '../types';
 import { loadFinalizedInspections, deleteFinalizedInspection } from '../utils/historyStorage';
-import { exportSingleApartmentToCSV } from '../utils/excel';
+import { exportSingleApartmentToCSV, exportFinalizedInspectionsListToCSV } from '../utils/excel';
 
 interface InspectionHistoryProps {
   onSelectHistoricalInspection: (inspection: FinalizedInspection) => void;
@@ -47,6 +48,8 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
 
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; aptId: string; dateStr: string } | null>(null);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
   useEffect(() => {
     setHistoryList(loadFinalizedInspections());
@@ -54,9 +57,15 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
 
   const handleDeleteClick = (id: string, aptId: string, dateStr: string) => {
     setDeleteTarget({ id, aptId, dateStr });
+    setDeletePassword('');
+    setPasswordError('');
   };
 
   const confirmDelete = () => {
+    if (deletePassword !== '4526') {
+      setPasswordError('Senha incorreta.');
+      return;
+    }
     if (deleteTarget) {
       const updated = deleteFinalizedInspection(deleteTarget.id);
       setHistoryList(updated);
@@ -64,6 +73,8 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
         onDeleteFinalizedInspection(deleteTarget.aptId, deleteTarget.id);
       }
       setDeleteTarget(null);
+      setDeletePassword('');
+      setPasswordError('');
     }
   };
 
@@ -212,7 +223,7 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
 
       {/* Results List */}
       <div>
-        <div className="flex items-center justify-between mb-3 px-1">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 px-1">
           <h3 className="text-sm font-bold text-purple-950 flex items-center gap-2">
             <FileCheck className="w-4 h-4 text-purple-700" />
             <span>
@@ -221,6 +232,11 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
               {searchDate ? ` na data ${searchDate.split('-').reverse().join('/')}` : ''}
             </span>
           </h3>
+
+          {filteredList.length > 0 && (
+            <div className="flex items-center gap-2">
+            </div>
+          )}
         </div>
 
         {filteredList.length === 0 ? (
@@ -466,6 +482,16 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
               >
                 Cancelar
               </button>
+              <div className="flex-1 flex flex-col gap-1">
+                <input
+                  type="password"
+                  placeholder="Senha de exclusão"
+                  value={deletePassword}
+                  onChange={(e) => setDeletePassword(e.target.value)}
+                  className="w-full py-2.5 px-3 border border-gray-300 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+                {passwordError && <p className="text-[10px] text-red-600 font-bold">{passwordError}</p>}
+              </div>
               <button
                 onClick={confirmDelete}
                 className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs sm:text-sm transition-colors shadow-md cursor-pointer"

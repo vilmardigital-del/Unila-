@@ -22,6 +22,7 @@ export interface ApartmentInspection {
   inspectorName?: string;
   keyCount?: '1 chave' | '2 chave' | '3 chave' | '4 chave' | '5 chave';
   occupancyStatus?: 'ocupado' | 'desocupado';
+  generalObservation?: string;
   items: Record<string, InspectionItemState>;
   status?: 'rascunho' | 'finalizada';
   finalizedAt?: string;
