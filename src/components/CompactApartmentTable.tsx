@@ -4,7 +4,7 @@ import { ApartmentInspection } from '../types';
 
 interface CompactTableProps {
   apartments: ApartmentInspection[];
-  onSelectApartment: (aptId: string) => void;
+  onSelectApartment: (id: string) => void;
 }
 
 export const CompactApartmentTable: React.FC<CompactTableProps> = ({ apartments, onSelectApartment }) => {

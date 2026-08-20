@@ -229,7 +229,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
   // Finalize inspection and store in history database with strict validations
   const handleFinalize = () => {
     // Validation: Check for missing observations for 'SIM' items
-    const missingObservations = Object.values(apartment.items || {}).filter(item => item.status === 'sim' && (!item.observation || item.observation.trim() === ''));
+    const missingObservations = (Object.values(apartment.items || {}) as InspectionItemState[]).filter(item => item.status === 'sim' && (!item.observation || item.observation.trim() === ''));
     
     if (missingObservations.length > 0) {
       setValidationError(`Para finalizar a vistoria, todos os itens marcados com "SIM" (reparos necessários) devem ter uma observação preenchida. Existem ${missingObservations.length} item(ns) sem observação.`);
@@ -584,12 +584,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                         >
                           {/* Row Index */}
                           <td className="py-2.5 px-3 text-center text-xs font-mono text-purple-800 bg-purple-50/30 border-r border-gray-200 font-semibold print:text-black print:bg-transparent">
-                            <div className="flex items-center justify-center gap-1">
-                              <button onClick={() => toggleRow(itemKey)} className="text-purple-600">
-                                {expandedRows.includes(itemKey) ? <ChevronUp className="w-3 h-3"/> : <ChevronDown className="w-3 h-3"/>}
-                              </button>
-                              {currentCounter}
-                            </div>
+                            {currentCounter}
                           </td>
 
                           {/* Print Only: Apt Number */}
@@ -677,7 +672,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                           </td>
 
                           {/* Observation Cell */}
-                          <td className={`py-2 px-3 relative ${expandedRows.includes(itemKey) ? '' : 'hidden'}`}>
+                          <td className="py-2 px-3 relative border-r border-gray-200 print:border-gray-300">
                             <div className="flex items-center gap-1.5">
                               <input
                                 id={`obs-${itemKey}`}
@@ -706,7 +701,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                                   <button
                                     type="button"
                                     onClick={() => setActiveObservationField(activeObservationField === itemKey ? null : itemKey)}
-                                    className="p-1.5 text-purple-700 hover:bg-purple-100 rounded-lg transition-colors border border-purple-200"
+                                    className="p-1.5 text-purple-700 hover:bg-purple-100 rounded-lg transition-colors border border-purple-200 cursor-pointer"
                                     title="Inserir observação rápida"
                                   >
                                     <MessageSquare className="w-3.5 h-3.5" />
@@ -717,8 +712,9 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                                       <div className="font-bold text-purple-900 border-b border-purple-100 pb-1 mb-1 px-1 flex items-center justify-between">
                                         <span>Sugestões Rápidas</span>
                                         <button
+                                          type="button"
                                           onClick={() => setActiveObservationField(null)}
-                                          className="text-gray-400 hover:text-gray-600"
+                                          className="text-gray-400 hover:text-gray-600 cursor-pointer"
                                         >
                                           ×
                                         </button>
@@ -732,7 +728,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                                               handleItemChange(itemKey, 'observation', sug);
                                               setActiveObservationField(null);
                                             }}
-                                            className="w-full text-left p-1.5 hover:bg-purple-50 text-gray-800 rounded font-medium text-[11px] transition-colors border border-transparent hover:border-purple-200"
+                                            className="w-full text-left p-1.5 hover:bg-purple-50 text-gray-800 rounded font-medium text-[11px] transition-colors border border-transparent hover:border-purple-200 cursor-pointer"
                                           >
                                             {sug}
                                           </button>

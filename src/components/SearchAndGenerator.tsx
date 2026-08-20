@@ -27,7 +27,6 @@ export const SearchAndGenerator: React.FC<SearchAndGeneratorProps> = ({
           </p>
         </div>
 
-        {/* Search Bar Input */}
         <div className="relative w-full sm:max-w-md">
           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-purple-500">
             <Search className="w-4 h-4" />
@@ -54,4 +53,5 @@ export const SearchAndGenerator: React.FC<SearchAndGeneratorProps> = ({
     </div>
   );
 };
+
 
