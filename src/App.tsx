@@ -9,6 +9,7 @@ import { QuickFixView } from './components/QuickFixView';
 import { SearchAndGenerator } from './components/SearchAndGenerator';
 import { ApartmentInspection, BuildingBlock, InspectionItemState, FinalizedInspection } from './types';
 import { loadStoredApartments, saveApartmentsState } from './utils/storage';
+import { saveFinalizedInspection } from './utils/historyStorage';
 import { createEmptyItemsMap } from './data/apartments';
 import { Sparkles, Building2, Search, PlusCircle, CheckCircle2, Trash2, User, Home, Key, AlertTriangle, ArrowRight, X, Wrench } from 'lucide-react';
 
@@ -158,28 +159,7 @@ export default function App() {
 
   // Callback when a finalized inspection is deleted from the database
   const handleDeleteFinalizedInspection = (aptId: string, _inspectionId: string) => {
-    const newEmptyItems = createEmptyItemsMap();
-    setApartments(prev => {
-      const next = prev.map(a => {
-        if (a.apartmentId === aptId) {
-          return {
-            ...a,
-            isGenerated: false,
-            status: 'rascunho' as const,
-            updatedAt: undefined,
-            finalizedAt: undefined,
-            inspectorName: '',
-            occupancyStatus: undefined,
-            keyCount: undefined,
-            items: newEmptyItems
-          };
-        }
-        return a;
-      });
-      saveApartmentsState(next);
-      return next;
-    });
-    if (selectedAptId === aptId) {
+    if (selectedAptId === aptId && historicalViewApt) {
       setSelectedAptId(null);
       setHistoricalViewApt(null);
     }
@@ -204,6 +184,62 @@ export default function App() {
     setHistoricalViewApt(historicalApt);
     setSelectedAptId(historical.apartmentId);
     setActiveView('spreadsheet');
+  };
+
+  // Finalizar Vistoria
+  const handleFinalizeInspection = (aptId: string) => {
+    const nowIso = new Date().toISOString();
+    const dateObj = new Date(nowIso);
+    const inspectionDate = dateObj.toISOString().split('T')[0];
+    const inspectionTime = dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+    setApartments(prev => {
+      const apartment = prev.find(a => a.apartmentId === aptId);
+      if (!apartment) return prev;
+
+      // Calculate counts
+      let simCount = 0;
+      let naoCount = 0;
+      let pendingCount = 0;
+      (Object.values(apartment.items || {}) as InspectionItemState[]).forEach(item => {
+        if (item.status === 'sim') simCount++;
+        else if (item.status === 'nao') naoCount++;
+        else pendingCount++;
+      });
+
+      const finalizedRecord: FinalizedInspection = {
+        id: `${apartment.apartmentId}_${Date.now()}`,
+        apartmentId: apartment.apartmentId,
+        block: apartment.block,
+        number: apartment.number,
+        floor: apartment.floor,
+        inspectorName: apartment.inspectorName,
+        occupancyStatus: apartment.occupancyStatus,
+        keyCount: apartment.keyCount,
+        finalizedAt: nowIso,
+        inspectionDate,
+        inspectionTime,
+        items: apartment.items,
+        simCount,
+        naoCount,
+        pendingCount
+      };
+      
+      saveFinalizedInspection(finalizedRecord);
+
+      const next = prev.map(a => {
+        if (a.apartmentId === aptId) {
+          return {
+            ...a,
+            status: 'finalizada' as const,
+            finalizedAt: nowIso
+          };
+        }
+        return a;
+      });
+      saveApartmentsState(next);
+      return next;
+    });
   };
 
   // Confirm generation from the unified modal
@@ -355,6 +391,7 @@ export default function App() {
     // If user typed a search term, match ANY apartment in the condominium matching the term
     if (term.length > 0) {
       return apartments.filter(apt => {
+        // if (apt.status === 'finalizada') return false;
         const matchId = apt.apartmentId.toLowerCase().includes(term);
         const matchInspector = (apt.inspectorName || '').toLowerCase().includes(term);
         const matchNumber = apt.number.toLowerCase().includes(term);
@@ -375,20 +412,18 @@ export default function App() {
   return (
     <div className="min-h-screen bg-purple-50/40 text-gray-900 flex flex-col font-sans selection:bg-purple-800 selection:text-white">
       
-      {/* Top Unila Header (Hidden on spreadsheet and history views for a cleaner layout) */}
-      {activeView !== 'spreadsheet' && activeView !== 'history' && (
-        <Header
-          totalApartments={totalApartments}
-          generatedCount={generatedCount}
-          simCountTotal={simCountTotal}
-          activeView={activeView}
-          setActiveView={(view) => {
-            if (view !== 'spreadsheet') setHistoricalViewApt(null);
-            setActiveView(view);
-          }}
-          selectedAptId={selectedAptId}
-        />
-      )}
+      {/* Top Unila Header */}
+      <Header
+        totalApartments={totalApartments}
+        generatedCount={generatedCount}
+        simCountTotal={simCountTotal}
+        activeView={activeView}
+        setActiveView={(view) => {
+          if (view !== 'spreadsheet') setHistoricalViewApt(null);
+          setActiveView(view);
+        }}
+        selectedAptId={selectedAptId}
+      />
 
       {/* Main Body */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -430,6 +465,7 @@ export default function App() {
                         onSelect={handleSelectApartment}
                         onGenerate={(aptId) => handleOpenGenerationModal(aptId)}
                         onOpenRepairs={(aptId) => handleOpenRepairsForApartment(aptId)}
+                        onFinalizeInspection={handleFinalizeInspection}
                         onDelete={(aptId) => setAptToDelete(aptId)}
                         onNewInspection={handleStartNewInspectionForApartment}
                       />

@@ -23,7 +23,7 @@ export const SearchAndGenerator: React.FC<SearchAndGeneratorProps> = ({
           <p className="text-xs sm:text-sm text-gray-600 mt-1">
             {searchTerm 
               ? `Apartamento "${searchTerm.toUpperCase()}" localizado (${filteredCount} resultado${filteredCount === 1 ? '' : 's'}).`
-              : "Digite o número do apartamento (ex: A001, B102, E205) para consultar reparos ou abrir a planilha."}
+              : "Digite o número do apartamento (ex: A001, B102, E205) para CONSULTAR, GERAR PLANILHA , CONFIRMAR REPAROS E FINALIZAR VISTORIAS."}
           </p>
         </div>
 
@@ -35,19 +35,11 @@ export const SearchAndGenerator: React.FC<SearchAndGeneratorProps> = ({
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Digite o apartamento (ex: A001)..."
+            placeholder="Digite o número do apartamento (ex: A001, B102, E205) para CONSULTAR, GERAR PLANILHA, CONFIRMAR REPAROS E FINALIZAR VISTORIAS."
             className="w-full pl-10 pr-9 py-2.5 bg-purple-50/50 border border-purple-200 rounded-xl text-sm text-purple-950 placeholder-purple-400 focus:outline-none focus:ring-2 focus:ring-purple-600 focus:bg-white transition-all font-medium uppercase shadow-2xs"
             autoFocus
           />
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm('')}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-purple-700 cursor-pointer"
-              title="Limpar pesquisa"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          )}
+          {/* Removed clear button */}
         </div>
       </div>
     </div>

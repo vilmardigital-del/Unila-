@@ -62,7 +62,47 @@ export const QuickFixView: React.FC<QuickFixViewProps> = ({
   );
 
   // Directly update SIM or NÃO in the apartment spreadsheet and save immediately
-  const handleSetStatus = (itemId: string, newStatus: MaintenanceChoice) => {
+  const handleSetStatus = (itemId: string, newStatus: MaintenanceChoice, observationOverride?: string) => {
+    if (isFinalized) return;
+    const item = itemsMap[itemId];
+    if (!item) return;
+
+    let updatedObservation = observationOverride !== undefined ? observationOverride : item.observation;
+    
+    // When marking as 'nao' (repaired) and there was an issue described, make sure the observation note is preserved and clear
+    if (newStatus === 'nao' && item.observation && item.observation.trim().length > 0 && observationOverride === undefined) {
+      if (!item.observation.includes('[Reparo Realizado]')) {
+        updatedObservation = `${item.observation.trim()} [Reparo Realizado]`;
+      }
+    }
+
+    const updatedItems = {
+      ...itemsMap,
+      [itemId]: {
+        ...item,
+        status: newStatus,
+        observation: updatedObservation
+      }
+    };
+
+    const updatedApartment: ApartmentInspection = {
+      ...currentApt,
+      isGenerated: true,
+      items: updatedItems,
+      updatedAt: new Date().toISOString()
+    };
+
+    onSaveApartment(updatedApartment);
+
+    // Auto-redirect to initial search screen if all repairs are done
+    const stillPending = (Object.values(updatedItems) as InspectionItemState[]).filter(i => i.status === 'sim');
+    if (stillPending.length === 0) {
+      onBack();
+    }
+  };
+
+  // Update observation text directly
+  const handleUpdateObservation = (itemId: string, observationText: string) => {
     if (isFinalized) return;
     const item = itemsMap[itemId];
     if (!item) return;
@@ -71,7 +111,7 @@ export const QuickFixView: React.FC<QuickFixViewProps> = ({
       ...itemsMap,
       [itemId]: {
         ...item,
-        status: newStatus
+        observation: observationText
       }
     };
 
@@ -89,6 +129,43 @@ export const QuickFixView: React.FC<QuickFixViewProps> = ({
   const handleConfirmServiceDone = (itemId: string) => {
     if (isFinalized) return;
     handleSetStatus(itemId, 'nao');
+  };
+
+  // Confirm ALL pending repairs at once and return to search view
+  const handleConfirmAllRepairs = () => {
+    if (isFinalized) return;
+
+    const updatedItems = { ...itemsMap };
+    let hasChanges = false;
+
+    Object.keys(updatedItems).forEach(key => {
+      const it = updatedItems[key];
+      if (it.status === 'sim') {
+        hasChanges = true;
+        let obs = it.observation;
+        if (obs && obs.trim().length > 0 && !obs.includes('[Reparo Realizado]')) {
+          obs = `${obs.trim()} [Reparo Realizado]`;
+        }
+        updatedItems[key] = {
+          ...it,
+          status: 'nao',
+          observation: obs
+        };
+      }
+    });
+
+    if (hasChanges) {
+      const updatedApartment: ApartmentInspection = {
+        ...currentApt,
+        isGenerated: true,
+        items: updatedItems,
+        updatedAt: new Date().toISOString()
+      };
+      onSaveApartment(updatedApartment);
+    }
+
+    // Return to initial search screen
+    onBack();
   };
 
   // Count pending repairs
@@ -153,23 +230,18 @@ export const QuickFixView: React.FC<QuickFixViewProps> = ({
           </div>
         </div>
 
-        {/* Action: Open full sheet or Back */}
+        {/* Action: Confirm all repairs / Back */}
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => onOpenSpreadsheet(currentApt.apartmentId)}
-            className="px-3.5 py-2 bg-purple-50 hover:bg-purple-100 text-purple-900 font-bold text-xs rounded-xl transition-colors flex items-center gap-1.5 border border-purple-200 cursor-pointer"
-            title="Abrir planilha completa"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-purple-700" />
-            <span>Ver Planilha Completa</span>
-          </button>
-
-          <button
-            onClick={onBack}
-            className="px-4 py-2 bg-purple-900 hover:bg-purple-800 text-white font-bold text-xs sm:text-sm rounded-xl transition-colors cursor-pointer shadow-xs"
-          >
-            Voltar
-          </button>
+          {!isFinalized && pendingRepairsCount > 0 && (
+            <button
+              onClick={handleConfirmAllRepairs}
+              className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer hover:shadow-lg active:scale-95"
+              title="Confirmar todos os reparos e voltar para a tela de pesquisa inicial"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Confirmar Todos os Reparos</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -186,13 +258,6 @@ export const QuickFixView: React.FC<QuickFixViewProps> = ({
             <p className="text-xs sm:text-sm text-gray-500 max-w-md mx-auto">
               Todos os itens deste apartamento estão marcados como em ordem (Não) ou ainda não foram identificadas pendências na vistoria.
             </p>
-            <button
-              onClick={() => onOpenSpreadsheet(currentApt.apartmentId)}
-              className="mt-2 inline-flex items-center gap-2 px-4 py-2 bg-purple-900 text-white text-xs font-bold rounded-xl hover:bg-purple-800 transition-colors cursor-pointer"
-            >
-              <FileSpreadsheet className="w-4 h-4" />
-              Abrir Planilha de Vistoria
-            </button>
           </div>
         ) : (
           <div className="space-y-3">
@@ -241,16 +306,30 @@ export const QuickFixView: React.FC<QuickFixViewProps> = ({
                       )}
                     </div>
 
-                    {/* Observation text */}
-                    {item.observation ? (
-                      <p className="text-xs sm:text-sm text-gray-700 bg-white/80 p-2 rounded-lg border border-purple-100 mt-1.5">
-                        <strong className="text-purple-950 font-semibold">Observação:</strong> {item.observation}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-gray-400 italic">
-                        Sem observação textual detalhada.
-                      </p>
-                    )}
+                    {/* Observation text & inline editor */}
+                    <div className="mt-2 space-y-1">
+                      {isFinalized ? (
+                        item.observation ? (
+                          <p className="text-xs sm:text-sm text-gray-700 bg-white/80 p-2.5 rounded-xl border border-purple-100">
+                            <strong className="text-purple-950 font-semibold">Observação do Reparo:</strong> {item.observation}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-gray-400 italic">
+                            Sem observação textual registrada.
+                          </p>
+                        )
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={item.observation || ''}
+                            onChange={(e) => handleUpdateObservation(item.id, e.target.value)}
+                            placeholder="Descreva o reparo realizado / observação..."
+                            className="w-full text-xs sm:text-sm px-3 py-1.5 bg-white border border-purple-200 rounded-xl text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-600 font-medium"
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Sim / Não Buttons (Directly Modifies Spreadsheet) */}

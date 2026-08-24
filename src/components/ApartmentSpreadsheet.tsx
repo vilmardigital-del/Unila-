@@ -228,11 +228,11 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
 
   // Finalize inspection and store in history database with strict validations
   const handleFinalize = () => {
-    // Validation: Check for missing observations for 'SIM' items
-    const missingObservations = (Object.values(apartment.items || {}) as InspectionItemState[]).filter(item => item.status === 'sim' && (!item.observation || item.observation.trim() === ''));
+    // Validation: Check for repairs ('SIM')
+    const hasRepairs = (Object.values(apartment.items || {}) as InspectionItemState[]).some(item => item.status === 'sim');
     
-    if (missingObservations.length > 0) {
-      setValidationError(`Para finalizar a vistoria, todos os itens marcados com "SIM" (reparos necessários) devem ter uma observação preenchida. Existem ${missingObservations.length} item(ns) sem observação.`);
+    if (hasRepairs) {
+      setValidationError(`A planilha só pode ser finalizada quando NÃO houver reparos pendentes (itens marcados com "SIM"). Verifique os itens e altere para "NÃO" quando o reparo for realizado.`);
       return;
     }
 
@@ -282,13 +282,8 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
     setShowFinalizedModal(true);
   };
 
-  // Delete current spreadsheet (both active and historical)
+  // Delete current spreadsheet
   const handleDeleteSpreadsheet = () => {
-    if (apartment.status === 'finalizada' || apartment.finalizedAt) {
-      const historyList = loadFinalizedInspections();
-      const matches = historyList.filter(h => h.apartmentId === apartment.apartmentId);
-      matches.forEach(m => deleteFinalizedInspection(m.id));
-    }
     if (onDeleteApartmentSheet) {
       onDeleteApartmentSheet(apartment.apartmentId);
     }
@@ -414,28 +409,28 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
         </div>
 
         {/* Excel Header Metadata Table */}
-        <div className="bg-purple-50/70 border-b-2 border-purple-200 p-4 sm:p-5 print:hidden">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-purple-50/70 border-b-2 border-purple-200 p-3 sm:p-4 print:hidden">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             
             {/* Apt & Block Info */}
-            <div className="bg-white p-3 rounded-xl border border-purple-200 shadow-2xs flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-purple-900 text-white font-black text-xl flex items-center justify-center shrink-0">
+            <div className="bg-white p-2 rounded-xl border border-purple-200 shadow-2xs flex items-center gap-2">
+              <div className="w-10 h-10 rounded-xl bg-purple-900 text-white font-black text-lg flex items-center justify-center shrink-0">
                 {apartment.apartmentId}
               </div>
               <div>
-                <span className="text-xs text-purple-700 font-bold uppercase tracking-wider block">Localização</span>
-                <span className="text-sm font-bold text-gray-900">
-                  Bloco {apartment.block} • {apartment.floor}
+                <span className="text-[10px] text-purple-700 font-bold uppercase tracking-wider block">Loc.</span>
+                <span className="text-xs font-bold text-gray-900">
+                  {apartment.block} • {apartment.floor}
                 </span>
               </div>
             </div>
 
             {/* Inspector Name Input */}
-            <div className="bg-white p-3 rounded-xl border border-purple-200 shadow-2xs flex items-center gap-2">
-              <User className="w-5 h-5 text-purple-700 shrink-0" />
+            <div className="bg-white p-2 rounded-xl border border-purple-200 shadow-2xs flex items-center gap-2">
+              <User className="w-4 h-4 text-purple-700 shrink-0" />
               <div className="w-full">
-                <label className="text-[11px] text-purple-700 font-bold uppercase tracking-wider block">
-                  Vistoriador / Responsável
+                <label className="text-[10px] text-purple-700 font-bold uppercase tracking-wider block">
+                  Responsável
                 </label>
                 <input
                   type="text"
@@ -443,7 +438,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                   readOnly={isLocked}
                   value={apartment.inspectorName || ''}
                   onChange={(e) => handleInspectorChange(e.target.value)}
-                  placeholder={isLocked ? 'Vistoriador não informado' : 'Nome do técnico / vistoriador'}
+                  placeholder={isLocked ? 'Não informado' : 'Nome...'}
                   className={`w-full text-xs font-semibold text-gray-900 focus:outline-none focus:ring-1 focus:ring-purple-600 rounded px-1 py-0.5 ${
                     isLocked ? 'bg-gray-100 text-gray-700 cursor-not-allowed' : 'bg-purple-50/30'
                   }`}
@@ -452,58 +447,49 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
             </div>
 
             {/* Date & Time */}
-            <div className="bg-white p-3 rounded-xl border border-purple-200 shadow-2xs flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-purple-700 shrink-0" />
+            <div className="bg-white p-2 rounded-xl border border-purple-200 shadow-2xs flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-purple-700 shrink-0" />
               <div>
-                <span className="text-[11px] text-purple-700 font-bold uppercase tracking-wider block">
-                  Data da Vistoria
+                <span className="text-[10px] text-purple-700 font-bold uppercase tracking-wider block">
+                  Data
                 </span>
                 <span className="text-xs font-semibold text-gray-900">
-                  {apartment.updatedAt ? new Date(apartment.updatedAt).toLocaleString('pt-BR') : 'Hoje / Não iniciada'}
+                  {apartment.updatedAt ? new Date(apartment.updatedAt).toLocaleDateString('pt-BR') : 'Hoje'}
                 </span>
               </div>
             </div>
-
-          </div>
-
-          {/* General Notes & Occupancy */}
-          <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div className="bg-white p-3 rounded-xl border border-purple-200 shadow-2xs">
-              <label className="text-[11px] text-purple-700 font-bold uppercase tracking-wider block mb-1">
-                Status do Apartamento
-              </label>
-              <select
-                disabled={isLocked}
-                value={apartment.occupancyStatus || ''}
-                onChange={(e) => handleOccupancyChange(e.target.value as 'ocupado' | 'desocupado')}
-                className={`w-full text-xs text-gray-800 focus:outline-none focus:ring-1 focus:ring-purple-600 rounded p-1.5 border border-gray-200 ${
-                  isLocked ? 'bg-gray-100 text-gray-600 cursor-not-allowed' : 'bg-gray-50'
-                }`}
-              >
-                <option value="">Selecione...</option>
-                <option value="ocupado">Ocupado</option>
-                <option value="desocupado">Desocupado</option>
-              </select>
-            </div>
-            <div className="bg-white p-3 rounded-xl border border-purple-200 shadow-2xs">
-              <label className="text-[11px] text-purple-700 font-bold uppercase tracking-wider block mb-1">
-                Quantidade de Chave
-              </label>
-              <select
-                disabled={isLocked}
-                value={apartment.keyCount || ''}
-                onChange={(e) => handleKeyCountChange(e.target.value as '1 chave' | '2 chave' | '3 chave' | '4 chave' | '5 chave')}
-                className={`w-full text-xs text-gray-800 focus:outline-none focus:ring-1 focus:ring-purple-600 rounded p-1.5 border border-gray-200 ${
-                  isLocked ? 'bg-gray-100 text-gray-600 cursor-not-allowed' : 'bg-gray-50'
-                }`}
-              >
-                <option value="">Selecione...</option>
-                <option value="1 chave">1 chave</option>
-                <option value="2 chave">2 chave</option>
-                <option value="3 chave">3 chave</option>
-                <option value="4 chave">4 chave</option>
-                <option value="5 chave">5 chave</option>
-              </select>
+            
+            {/* Occupancy & Keys */}
+            <div className="bg-white p-2 rounded-xl border border-purple-200 shadow-2xs flex items-center gap-2">
+                <div className="flex flex-col gap-1 w-full">
+                    <select
+                        disabled={isLocked}
+                        value={apartment.occupancyStatus || ''}
+                        onChange={(e) => handleOccupancyChange(e.target.value as 'ocupado' | 'desocupado')}
+                        className={`w-full text-[10px] text-gray-800 focus:outline-none focus:ring-1 focus:ring-purple-600 rounded p-0.5 border border-gray-200 ${
+                        isLocked ? 'bg-gray-100 text-gray-600 cursor-not-allowed' : 'bg-gray-50'
+                        }`}
+                    >
+                        <option value="">Status...</option>
+                        <option value="ocupado">Ocupado</option>
+                        <option value="desocupado">Desocupado</option>
+                    </select>
+                    <select
+                        disabled={isLocked}
+                        value={apartment.keyCount || ''}
+                        onChange={(e) => handleKeyCountChange(e.target.value as '1 chave' | '2 chave' | '3 chave' | '4 chave' | '5 chave')}
+                        className={`w-full text-[10px] text-gray-800 focus:outline-none focus:ring-1 focus:ring-purple-600 rounded p-0.5 border border-gray-200 ${
+                        isLocked ? 'bg-gray-100 text-gray-600 cursor-not-allowed' : 'bg-gray-50'
+                        }`}
+                    >
+                        <option value="">Chaves...</option>
+                        <option value="1 chave">1 chave</option>
+                        <option value="2 chave">2 chave</option>
+                        <option value="3 chave">3 chave</option>
+                        <option value="4 chave">4 chave</option>
+                        <option value="5 chave">5 chave</option>
+                    </select>
+                </div>
             </div>
           </div>
         </div>
@@ -755,15 +741,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
 
         {/* Bottom Action Bar (At the end of the spreadsheet) */}
         <div className="bg-white border border-purple-200 rounded-2xl p-4 sm:p-5 shadow-md flex flex-col lg:flex-row items-center justify-between gap-4 print:hidden">
-          <div className="flex items-center gap-2 w-full lg:w-auto">
-            <button
-              onClick={onBack}
-              className="px-4 py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-900 font-bold rounded-xl text-xs sm:text-sm transition-colors flex items-center justify-center gap-2 border border-purple-200 cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Voltar para Lista</span>
-            </button>
-          </div>
+
 
           <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto justify-center lg:justify-end">
             {/* Quick Export / Print Tools */}
@@ -910,19 +888,6 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
 
             {/* Modal Actions */}
             <div className="space-y-2.5 pt-2">
-              {onStartNewInspection && (
-                <button
-                  onClick={() => {
-                    setShowFinalizedModal(false);
-                    onStartNewInspection(apartment.apartmentId);
-                  }}
-                  className="w-full py-3 px-4 bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white font-extrabold rounded-xl text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  <PlusCircle className="w-4 h-4 text-amber-300" />
-                  <span>Gerar Nova Planilha para Nova Verificação (Apto {apartment.apartmentId})</span>
-                </button>
-              )}
-
               {onGoToHistory && (
                 <button
                   onClick={() => {

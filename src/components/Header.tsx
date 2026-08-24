@@ -1,5 +1,5 @@
 import React from 'react';
-import { ClipboardList, Building2, CheckCircle2, AlertTriangle, FileSpreadsheet, History } from 'lucide-react';
+import { ClipboardList, Building2, CheckCircle2, AlertTriangle, FileSpreadsheet, History, ArrowLeft } from 'lucide-react';
 
 interface HeaderProps {
   totalApartments: number;
@@ -18,7 +18,7 @@ export const Header: React.FC<HeaderProps> = ({
   setActiveView,
 }) => {
   return (
-    <header className="bg-gradient-to-r from-purple-900 via-purple-800 to-indigo-900 text-white shadow-md border-b-2 border-purple-500 print:hidden">
+    <header className="sticky top-0 z-50 bg-gradient-to-r from-purple-900 via-purple-800 to-indigo-900 text-white shadow-md border-b-2 border-purple-500 print:hidden">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2.5">
           
@@ -45,6 +45,14 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Center / Right: Quick Stats & Navigation */}
           <div className="flex flex-wrap items-center justify-between lg:justify-end gap-2.5">
             
+            <button
+                onClick={() => setActiveView('search')}
+                className="px-3 py-1.5 bg-white text-purple-900 font-bold text-xs rounded-lg shadow-sm hover:bg-purple-50 transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Voltar
+              </button>
+
             {/* Compact Quick Stats */}
             <div className="grid grid-cols-3 gap-1.5 sm:gap-2 bg-purple-950/70 p-1 px-2.5 rounded-lg border border-purple-700/50 text-center">
               <div className="px-1.5">

@@ -17,13 +17,8 @@ export function loadFinalizedInspections(): FinalizedInspection[] {
 export function saveFinalizedInspection(inspection: FinalizedInspection): FinalizedInspection[] {
   try {
     const currentList = loadFinalizedInspections();
-    // Check if updating existing record by id OR by (apartmentId + inspectionDate) to avoid duplicate dates
-    const index = currentList.findIndex(
-      item =>
-        item.id === inspection.id ||
-        (item.apartmentId.toUpperCase() === inspection.apartmentId.toUpperCase() &&
-          item.inspectionDate === inspection.inspectionDate)
-    );
+    // Check if updating existing record by unique id
+    const index = currentList.findIndex(item => item.id === inspection.id);
     let updatedList: FinalizedInspection[];
     
     if (index >= 0) {

@@ -130,13 +130,7 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
           </div>
 
           {onBack && (
-            <button
-              onClick={onBack}
-              className="px-4 py-2.5 bg-white text-purple-900 hover:bg-purple-50 font-bold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-md self-start sm:self-auto cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4 text-purple-800" />
-              <span>Voltar para Início</span>
-            </button>
+            <></>
           )}
         </div>
       </div>
@@ -375,9 +369,15 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
                                   <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0 ${
                                     srv.status === 'sim'
                                       ? 'bg-amber-200 text-amber-900 border border-amber-300'
-                                      : 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                                      : srv.observation
+                                      ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                                      : 'bg-gray-100 text-gray-700 border border-gray-200'
                                   }`}>
-                                    {srv.status === 'sim' ? 'SIM (Reparo)' : 'NÃO (OK)'}
+                                    {srv.status === 'sim'
+                                      ? 'SIM (Reparo Pendente)'
+                                      : srv.observation
+                                      ? 'Reparo Realizado (NÃO)'
+                                      : 'NÃO (OK)'}
                                   </span>
                                 </div>
 

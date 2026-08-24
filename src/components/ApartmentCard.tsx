@@ -9,6 +9,7 @@ interface ApartmentCardProps {
   onOpenRepairs?: (aptId: string) => void;
   onDelete?: (aptId: string) => void;
   onNewInspection?: (aptId: string) => void;
+  onFinalizeInspection?: (aptId: string) => void;
 }
 
 export const ApartmentCard: React.FC<ApartmentCardProps> = ({
@@ -17,7 +18,11 @@ export const ApartmentCard: React.FC<ApartmentCardProps> = ({
   onGenerate,
   onOpenRepairs,
   onDelete,
+  onFinalizeInspection,
 }) => {
+  const [showPassword, setShowPassword] = React.useState(false);
+  const [password, setPassword] = React.useState('');
+  const [passwordError, setPasswordError] = React.useState(false);
   let countSim = 0;
   let countNao = 0;
   let totalItems = 0;
@@ -164,7 +169,6 @@ export const ApartmentCard: React.FC<ApartmentCardProps> = ({
           </div>
         )}
       </div>
-
       {/* Action Buttons */}
       <div className="mt-4 pt-3 border-t border-gray-100">
         {isFinalized ? (
@@ -177,31 +181,65 @@ export const ApartmentCard: React.FC<ApartmentCardProps> = ({
               <FileSpreadsheet className="w-3.5 h-3.5 text-purple-700" />
               <span>Ver Vistoria</span>
             </button>
-
             <button
               onClick={() => onGenerate(apartment.apartmentId)}
               className="flex-1 py-2 px-3 bg-purple-900 hover:bg-purple-800 text-white font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
-              title="Criar nova planilha para nova vistoria deste apartamento"
+              title="Gerar nova planilha"
             >
               <PlusCircle className="w-3.5 h-3.5 text-amber-300" />
-              <span>Nova Vistoria</span>
+              <span>Gerar Nova</span>
             </button>
           </div>
         ) : apartment.isGenerated ? (
           <div className="flex items-center gap-1.5 w-full">
-            {onOpenRepairs && (
+            {onOpenRepairs && countSim > 0 && (
               <button
                 onClick={() => onOpenRepairs(apartment.apartmentId)}
-                className={`py-2 px-2.5 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1 cursor-pointer border ${
-                  countSim > 0
-                    ? 'bg-amber-600 hover:bg-amber-700 text-white border-amber-600 shadow-xs'
-                    : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200'
-                }`}
+                className="py-2 px-2.5 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1 cursor-pointer border bg-amber-600 hover:bg-amber-700 text-white border-amber-600 shadow-xs"
                 title="Ver e editar apenas os reparos e observações deste apartamento"
               >
                 <Wrench className="w-3.5 h-3.5" />
                 <span>Reparos</span>
               </button>
+            )}
+
+            {countSim === 0 && onFinalizeInspection && !showPassword && (
+              <button
+                className="py-2 px-2.5 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1 cursor-pointer border bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 shadow-xs"
+                onClick={() => setShowPassword(true)}
+              >
+                <CheckCircle className="w-3.5 h-3.5" />
+                <span>Finalizar</span>
+              </button>
+            )}
+
+            {showPassword && (
+              <div className="flex items-center gap-1">
+                <input
+                  type="password"
+                  className="w-16 p-1 border border-gray-300 rounded text-[10px]"
+                  placeholder="Senha"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+                <button
+                  className="py-1 px-1.5 bg-emerald-600 text-white text-[10px] rounded hover:bg-emerald-700 transition-colors"
+                  onClick={() => {
+                    if (password === '4526') {
+                      onFinalizeInspection?.(apartment.apartmentId);
+                      setShowPassword(false);
+                      setPassword('');
+                      setPasswordError(false);
+                    } else {
+                      setPasswordError(true);
+                      setPassword('');
+                    }
+                  }}
+                >
+                  OK
+                </button>
+                {passwordError && <span className="text-red-500 text-[10px]">!</span>}
+              </div>
             )}
 
             <button
