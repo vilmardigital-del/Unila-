@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Header } from './components/Header';
+import { LoginModal } from './components/LoginModal';
 import { ApartmentCard } from './components/ApartmentCard';
 import { CompactApartmentTable } from './components/CompactApartmentTable';
 import { ApartmentSpreadsheet } from './components/ApartmentSpreadsheet';
@@ -18,6 +19,12 @@ export default function App() {
   const [activeView, setActiveView] = useState<'search' | 'dashboard' | 'spreadsheet' | 'history' | 'quick-fix'>('search');
   const [selectedAptId, setSelectedAptId] = useState<string | null>(null);
   const [aptToDelete, setAptToDelete] = useState<string | null>(null);
+  
+  // Auth state
+  const [userRole, setUserRole] = useState<'admin' | 'user' | null>(null);
+  const [showLoginModal, setShowLoginModal] = useState(true);
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState(false);
   
   // Unified Generation Modal State
   const [generationTarget, setGenerationTarget] = useState<string | 'FILTERED' | null>(null);
@@ -107,16 +114,25 @@ export default function App() {
   };
 
   // Open the unified configuration modal for generating spreadsheet(s)
-  const handleOpenGenerationModal = (target: string | 'FILTERED') => {
+  const handleOpenGenerationModal = (target: string | 'FILTERED', forceClear: boolean = false) => {
     setGenerationTarget(target);
     setModalError(null);
-    // If targeting a specific apartment that already has some metadata, pre-fill it
-    if (target !== 'FILTERED') {
+
+    if (forceClear || target === 'FILTERED') {
+      setInspectorName('');
+      setApartmentStatus('');
+      setKeyCount('');
+    } else {
       const existing = apartments.find(a => a.apartmentId === target);
-      if (existing) {
+      if (existing && existing.isGenerated) {
         if (existing.inspectorName) setInspectorName(existing.inspectorName);
         if (existing.occupancyStatus) setApartmentStatus(existing.occupancyStatus);
         if (existing.keyCount) setKeyCount(existing.keyCount);
+      } else {
+        // If not generated, make sure they are empty
+        setInspectorName('');
+        setApartmentStatus('');
+        setKeyCount('');
       }
     }
   };
@@ -125,7 +141,7 @@ export default function App() {
   const handleStartNewInspectionForApartment = (aptId: string) => {
     setHistoricalViewApt(null);
     setSelectedAptId(aptId);
-    handleOpenGenerationModal(aptId);
+    handleOpenGenerationModal(aptId, true);
   };
 
   // Delete / reset an apartment spreadsheet
@@ -265,6 +281,18 @@ export default function App() {
     const finalKeys = keyCount as '1 chave' | '2 chave' | '3 chave' | '4 chave' | '5 chave';
 
     if (generationTarget === 'FILTERED') {
+      // For filtered, check if any of the apartments are already generated and not finalized
+      const activePending = apartments.filter(a => 
+        filteredApartments.some(fa => fa.apartmentId === a.apartmentId) && 
+        a.isGenerated && 
+        a.status !== 'finalizada'
+      );
+      
+      if (activePending.length > 0) {
+        setModalError(`Não é possível gerar novas vistorias. Os seguintes apartamentos já possuem vistorias em andamento (não finalizadas): ${activePending.map(a => a.apartmentId).join(', ')}`);
+        return;
+      }
+
       let firstAptIdToOpen: string | null = null;
       setApartments(prev => {
         const next = prev.map(a => {
@@ -297,6 +325,13 @@ export default function App() {
       }
     } else if (generationTarget) {
       const targetId = generationTarget;
+      const existing = apartments.find(a => a.apartmentId === targetId);
+
+      if (existing && existing.isGenerated && existing.status !== 'finalizada') {
+        setModalError(`A vistoria do Apartamento ${targetId} já está em andamento e não foi finalizada. Por favor, finalize a vistoria atual antes de gerar uma nova.`);
+        return;
+      }
+
       setApartments(prev => {
         const next = prev.map(a => {
           if (a.apartmentId === targetId) {
@@ -409,6 +444,10 @@ export default function App() {
     return apartments.find(a => a.apartmentId === selectedAptId) || null;
   }, [apartments, selectedAptId, historicalViewApt]);
 
+  if (showLoginModal) {
+    return <LoginModal onLogin={(role) => { setUserRole(role); setShowLoginModal(false); }} />;
+  }
+
   return (
     <div className="min-h-screen bg-purple-50/40 text-gray-900 flex flex-col font-sans selection:bg-purple-800 selection:text-white">
       
@@ -465,7 +504,6 @@ export default function App() {
                         onSelect={handleSelectApartment}
                         onGenerate={(aptId) => handleOpenGenerationModal(aptId)}
                         onOpenRepairs={(aptId) => handleOpenRepairsForApartment(aptId)}
-                        onFinalizeInspection={handleFinalizeInspection}
                         onDelete={(aptId) => setAptToDelete(aptId)}
                         onNewInspection={handleStartNewInspectionForApartment}
                       />
@@ -489,6 +527,7 @@ export default function App() {
             onGoToHistory={() => setActiveView('history')}
             onDeleteApartmentSheet={handleDeleteApartmentSheet}
             onStartNewInspection={handleStartNewInspectionForApartment}
+            userRole={userRole || 'user'}
           />
         )}
 

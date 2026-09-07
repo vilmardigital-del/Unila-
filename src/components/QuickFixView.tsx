@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Wrench,
   CheckCircle2,
@@ -7,7 +7,8 @@ import {
   Check,
   Building2,
   FileSpreadsheet,
-  AlertCircle
+  AlertCircle,
+  Lock
 } from 'lucide-react';
 import { ApartmentInspection, InspectionItemState, MaintenanceChoice } from '../types';
 
@@ -26,6 +27,11 @@ export const QuickFixView: React.FC<QuickFixViewProps> = ({
   onOpenSpreadsheet,
   onBack
 }) => {
+  const [showPasswordPrompt, setShowPasswordPrompt] = useState(false);
+  const [actionToConfirm, setActionToConfirm] = useState<(() => void) | null>(null);
+  const [inputPassword, setInputPassword] = useState('');
+  const [errorPassword, setErrorPassword] = useState(false);
+
   const currentApt = useMemo(
     () => apartments.find(a => a.apartmentId.toUpperCase() === apartmentId.toUpperCase()),
     [apartmentId, apartments]
@@ -64,6 +70,18 @@ export const QuickFixView: React.FC<QuickFixViewProps> = ({
   // Directly update SIM or NÃO in the apartment spreadsheet and save immediately
   const handleSetStatus = (itemId: string, newStatus: MaintenanceChoice, observationOverride?: string) => {
     if (isFinalized) return;
+    const item = itemsMap[itemId];
+    if (!item) return;
+
+    if (newStatus === 'sim') {
+      setActionToConfirm(() => () => performSetStatus(itemId, newStatus, observationOverride));
+      setShowPasswordPrompt(true);
+    } else {
+      performSetStatus(itemId, newStatus, observationOverride);
+    }
+  };
+
+  const performSetStatus = (itemId: string, newStatus: MaintenanceChoice, observationOverride?: string) => {
     const item = itemsMap[itemId];
     if (!item) return;
 
@@ -128,44 +146,59 @@ export const QuickFixView: React.FC<QuickFixViewProps> = ({
   // Mark single service as done (NÃO) with direct confirmation
   const handleConfirmServiceDone = (itemId: string) => {
     if (isFinalized) return;
-    handleSetStatus(itemId, 'nao');
+    setActionToConfirm(() => () => handleSetStatus(itemId, 'nao'));
+    setShowPasswordPrompt(true);
   };
 
   // Confirm ALL pending repairs at once and return to search view
   const handleConfirmAllRepairs = () => {
     if (isFinalized) return;
+    setActionToConfirm(() => () => {
+        const updatedItems = { ...itemsMap };
+        let hasChanges = false;
 
-    const updatedItems = { ...itemsMap };
-    let hasChanges = false;
+        Object.keys(updatedItems).forEach(key => {
+          const it = updatedItems[key];
+          if (it.status === 'sim') {
+            hasChanges = true;
+            let obs = it.observation;
+            if (obs && obs.trim().length > 0 && !obs.includes('[Reparo Realizado]')) {
+              obs = `${obs.trim()} [Reparo Realizado]`;
+            }
+            updatedItems[key] = {
+              ...it,
+              status: 'nao',
+              observation: obs
+            };
+          }
+        });
 
-    Object.keys(updatedItems).forEach(key => {
-      const it = updatedItems[key];
-      if (it.status === 'sim') {
-        hasChanges = true;
-        let obs = it.observation;
-        if (obs && obs.trim().length > 0 && !obs.includes('[Reparo Realizado]')) {
-          obs = `${obs.trim()} [Reparo Realizado]`;
+        if (hasChanges) {
+          const updatedApartment: ApartmentInspection = {
+            ...currentApt,
+            isGenerated: true,
+            items: updatedItems,
+            updatedAt: new Date().toISOString()
+          };
+          onSaveApartment(updatedApartment);
         }
-        updatedItems[key] = {
-          ...it,
-          status: 'nao',
-          observation: obs
-        };
-      }
+
+        // Return to initial search screen
+        onBack();
     });
+    setShowPasswordPrompt(true);
+  };
 
-    if (hasChanges) {
-      const updatedApartment: ApartmentInspection = {
-        ...currentApt,
-        isGenerated: true,
-        items: updatedItems,
-        updatedAt: new Date().toISOString()
-      };
-      onSaveApartment(updatedApartment);
+  const handlePasswordSubmit = () => {
+    if (inputPassword === '4526') {
+      actionToConfirm?.();
+      setShowPasswordPrompt(false);
+      setInputPassword('');
+      setErrorPassword(false);
+    } else {
+      setErrorPassword(true);
+      setInputPassword('');
     }
-
-    // Return to initial search screen
-    onBack();
   };
 
   // Count pending repairs
@@ -374,6 +407,55 @@ export const QuickFixView: React.FC<QuickFixViewProps> = ({
           </div>
         )}
       </div>
+
+      {showPasswordPrompt && (
+        <div className="fixed inset-0 bg-purple-950/80 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-sm w-full shadow-2xl border border-purple-100 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center">
+                <Lock className="w-5 h-5" />
+              </div>
+              <h3 className="text-lg font-extrabold text-purple-950">Autenticação Necessária</h3>
+            </div>
+            
+            <p className="text-sm text-gray-600">
+              Digite a senha de 4 dígitos para confirmar a ação.
+            </p>
+
+            <input
+              type="password"
+              value={inputPassword}
+              onChange={(e) => {
+                setInputPassword(e.target.value);
+                setErrorPassword(false);
+              }}
+              placeholder="0000"
+              maxLength={4}
+              className={`w-full px-4 py-3 border rounded-xl text-center text-xl font-mono tracking-widest focus:outline-none focus:ring-2 ${
+                errorPassword ? 'border-red-500 ring-red-200' : 'border-purple-200 ring-purple-600'
+              }`}
+            />
+            {errorPassword && (
+              <p className="text-xs text-red-600 font-bold">Senha incorreta. Tente novamente.</p>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => { setShowPasswordPrompt(false); setInputPassword(''); setErrorPassword(false); }}
+                className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl text-sm transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handlePasswordSubmit}
+                className="flex-1 py-3 bg-purple-900 hover:bg-purple-800 text-white font-bold rounded-xl text-sm transition-colors"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

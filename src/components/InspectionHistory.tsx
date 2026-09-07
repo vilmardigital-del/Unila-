@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   AlertTriangle,
   Download,
-  Printer,
   FileText,
   Eye,
   PlusCircle,
@@ -27,7 +26,7 @@ import {
 } from 'lucide-react';
 import { FinalizedInspection, BuildingBlock, InspectionItemState } from '../types';
 import { loadFinalizedInspections, deleteFinalizedInspection } from '../utils/historyStorage';
-import { exportSingleApartmentToCSV, exportFinalizedInspectionsListToCSV } from '../utils/excel';
+import { exportApartmentToPDF } from '../utils/pdfExport';
 
 interface InspectionHistoryProps {
   onSelectHistoricalInspection: (inspection: FinalizedInspection) => void;
@@ -291,10 +290,6 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
                       </div>
 
                       <div className="text-right">
-                        <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 px-2.5 py-1 rounded-lg">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Finalizada</span>
-                        </span>
                       </div>
                     </div>
 
@@ -423,23 +418,14 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
                   </div>
 
                   {/* Actions Footer */}
-                  <div className="pt-3 border-t border-purple-100 flex items-center justify-between gap-2">
+                  <div className="pt-3 border-t border-purple-100 flex flex-wrap items-center justify-between gap-2">
                     <button
                       onClick={() => onSelectHistoricalInspection(item)}
-                      className="flex-1 px-3 py-2 bg-purple-100 hover:bg-purple-200 text-purple-900 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors border border-purple-200 cursor-pointer"
+                      className="flex-1 min-w-[90px] px-2.5 py-2 bg-purple-100 hover:bg-purple-200 text-purple-900 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors border border-purple-200 cursor-pointer"
                       title="Visualizar a planilha arquivada desta vistoria (somente leitura)"
                     >
                       <Eye className="w-3.5 h-3.5 text-purple-700" />
                       <span>Ver Vistoria</span>
-                    </button>
-
-                    <button
-                      onClick={() => onCreateNewForApartment(item.apartmentId)}
-                      className="flex-1 px-3 py-2 bg-purple-900 hover:bg-purple-800 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors shadow-xs cursor-pointer"
-                      title="Gerar uma nova planilha zerada para nova vistoria deste apartamento"
-                    >
-                      <PlusCircle className="w-3.5 h-3.5 text-amber-300" />
-                      <span>Nova Vistoria</span>
                     </button>
 
                     <button

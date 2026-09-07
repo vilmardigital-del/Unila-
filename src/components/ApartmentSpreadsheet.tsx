@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  FileSpreadsheet,
-  Printer,
   Download,
   FileText,
   ArrowLeft,
@@ -26,8 +24,8 @@ import {
   Save
 } from 'lucide-react';
 import { ApartmentInspection, MaintenanceChoice, InspectionItemState, FinalizedInspection } from '../types';
-import { MAINTENANCE_CATEGORIES, COMMON_OBSERVATION_SUGGESTIONS } from '../data/categories';
-import { exportSingleApartmentToCSV } from '../utils/excel';
+import { MAINTENANCE_CATEGORIES } from '../data/categories';
+import { exportApartmentToPDF } from '../utils/pdfExport';
 import { saveFinalizedInspection, deleteFinalizedInspection, loadFinalizedInspections } from '../utils/historyStorage';
 
 interface ApartmentSpreadsheetProps {
@@ -37,23 +35,60 @@ interface ApartmentSpreadsheetProps {
   onGoToHistory?: () => void;
   onDeleteApartmentSheet?: (apartmentId: string) => void;
   onStartNewInspection?: (apartmentId: string) => void;
+  userRole: 'admin' | 'user';
 }
 
 export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
-  apartment,
+  apartment: initialApartment,
   onUpdateApartment,
   onBack,
   onGoToHistory,
   onDeleteApartmentSheet,
-  onStartNewInspection
+  onStartNewInspection,
+  userRole
 }) => {
   const [activeObservationField, setActiveObservationField] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<string[]>([]);
   const [showSavedToast, setShowSavedToast] = useState(false);
   const [toastMessage, setToastMessage] = useState('Alterações Salvas!');
   const [showFinalizedModal, setShowFinalizedModal] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
+  const [showFinalizationPrompt, setShowFinalizationPrompt] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [password, setPassword] = useState('');
+  const [passwordError, setPasswordError] = useState(false);
+  const [isProcessingFinalization, setIsProcessingFinalization] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [isMetadataOpen, setIsMetadataOpen] = useState(false);
+  const [localApartment, setLocalApartment] = useState(initialApartment);
+  
+  const [showReopenPasswordModal, setShowReopenPasswordModal] = useState(false);
+  const [reopenPassword, setReopenPassword] = useState('');
+  const [reopenPasswordError, setReopenPasswordError] = useState(false);
+
+  useEffect(() => {
+    setLocalApartment(initialApartment);
+  }, [initialApartment]);
+
+  const [userSuggestions, setUserSuggestions] = useState<string[]>([]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('userObservations');
+    if (saved) {
+      setUserSuggestions(JSON.parse(saved));
+    }
+  }, []);
+
+  const saveObservationSuggestion = (obs: string) => {
+    if (obs.trim() === '') return;
+    const current = JSON.parse(localStorage.getItem('userObservations') || '[]');
+    if (!current.includes(obs)) {
+      const updated = [...current, obs];
+      localStorage.setItem('userObservations', JSON.stringify(updated));
+      setUserSuggestions(updated);
+    }
+  };
 
   const toggleRow = (key: string) => {
     setExpandedRows(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
@@ -61,22 +96,28 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
 
   // Save spreadsheet and permanently lock from direct open modification if 100% complete
   const handleSaveSpreadsheet = () => {
-    const is100PercentComplete = pendingCount === 0;
+    // Check if all items are answered
+    if (pendingCount > 0) {
+      setToastMessage(`Atenção: A planilha só pode ser salva quando TODOS os itens forem respondidos. Restam ${pendingCount} item(ns) pendente(s).`);
+      setShowSavedToast(true);
+      setTimeout(() => setShowSavedToast(false), 3000);
+      return;
+    }
+
+    const is100PercentComplete = true; // Since pendingCount === 0
     
     const updatedApt: ApartmentInspection = {
-      ...apartment,
+      ...localApartment,
       isGenerated: true,
       isSaved: true,
-      isLocked: is100PercentComplete, // Lock only if 100% complete
+      isLocked: true, // Lock automatically if 100% complete
       updatedAt: new Date().toISOString()
     };
+    
+    setLocalApartment(updatedApt);
     onUpdateApartment(updatedApt);
     
-    if (is100PercentComplete) {
-      setToastMessage('Planilha Salva com Sucesso! 100% concluído, planilha bloqueada.');
-    } else {
-      setToastMessage('Planilha Salva com Sucesso! Permanece editável.');
-    }
+    setToastMessage('Planilha Salva com Sucesso! 100% concluído, planilha bloqueada.');
     
     setShowSavedToast(true);
     setTimeout(() => setShowSavedToast(false), 3000);
@@ -88,7 +129,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
   let naoCount = 0;
   let pendingCount = 0;
 
-  (Object.values(apartment.items || {}) as InspectionItemState[]).forEach(item => {
+  (Object.values(localApartment.items || {}) as InspectionItemState[]).forEach(item => {
     totalCount++;
     if (item.status === 'sim') simCount++;
     else if (item.status === 'nao') naoCount++;
@@ -99,7 +140,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
   const is100Percent = totalCount > 0 && pendingCount === 0;
 
   // Directly check if spreadsheet is locked / finalized
-  const isLocked = Boolean(apartment.isLocked || apartment.status === 'finalizada');
+  const isLocked = Boolean(localApartment.isLocked || localApartment.status === 'finalizada');
 
   // Helper to update a specific item status or observation
   const handleItemChange = (itemKey: string, field: 'status' | 'observation', value: any, bypassValidation: boolean = false) => {
@@ -107,16 +148,16 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
     const nowStr = new Date().toISOString();
     
     // Check if setting to 'sim' without observation
-    if (!bypassValidation && field === 'status' && value === 'sim' && (!apartment.items[itemKey].observation || apartment.items[itemKey].observation.trim() === '')) {
+    if (!bypassValidation && field === 'status' && value === 'sim' && (!localApartment.items[itemKey].observation || localApartment.items[itemKey].observation.trim() === '')) {
       setToastMessage('Atenção: A observação é obrigatória para itens com "SIM".');
       triggerSavedToast();
       return;
     }
 
     const updatedItems = {
-      ...apartment.items,
+      ...localApartment.items,
       [itemKey]: {
-        ...apartment.items[itemKey],
+        ...localApartment.items[itemKey],
         [field]: value
       }
     };
@@ -126,15 +167,13 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
       updatedItems[itemKey].status = 'sim';
     }
 
-    const updatedApt: ApartmentInspection = {
-      ...apartment,
-      isGenerated: true,
+    setLocalApartment({
+      ...localApartment,
       updatedAt: nowStr,
       items: updatedItems
-    };
+    });
 
-    onUpdateApartment(updatedApt);
-    setToastMessage('Alterações Salvas!');
+    setToastMessage('Alterações Pendentes (Salvar Manualmente)');
     triggerSavedToast();
   };
 
@@ -146,7 +185,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
   // Bulk actions
   const handleSetAll = (choice: MaintenanceChoice) => {
     if (isLocked) return;
-    const updatedItems = { ...apartment.items };
+    const updatedItems = { ...localApartment.items };
     Object.keys(updatedItems).forEach(key => {
       updatedItems[key] = {
         ...updatedItems[key],
@@ -154,8 +193,8 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
       };
     });
 
-    onUpdateApartment({
-      ...apartment,
+    setLocalApartment({
+      ...localApartment,
       isGenerated: true,
       updatedAt: new Date().toISOString(),
       items: updatedItems
@@ -165,8 +204,8 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
 
   const handleInspectorChange = (name: string) => {
     if (isLocked) return;
-    onUpdateApartment({
-      ...apartment,
+    setLocalApartment({
+      ...localApartment,
       inspectorName: name,
       updatedAt: new Date().toISOString()
     });
@@ -175,8 +214,8 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
 
   const handleKeyCountChange = (count: '1 chave' | '2 chave' | '3 chave' | '4 chave' | '5 chave') => {
     if (isLocked) return;
-    onUpdateApartment({
-      ...apartment,
+    setLocalApartment({
+      ...localApartment,
       keyCount: count,
       updatedAt: new Date().toISOString()
     });
@@ -185,26 +224,14 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
 
   const handleOccupancyChange = (status: 'ocupado' | 'desocupado') => {
     if (isLocked) return;
-    onUpdateApartment({
-      ...apartment,
+    setLocalApartment({
+      ...localApartment,
       occupancyStatus: status,
       updatedAt: new Date().toISOString()
     });
     triggerSavedToast();
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const handleExportPDF = () => {
-    const originalTitle = document.title;
-    document.title = `Vistoria_Apt_${apartment.apartmentId}_${new Date().toISOString().slice(0, 10)}`;
-    window.print();
-    setTimeout(() => {
-      document.title = originalTitle;
-    }, 1000);
-  };
 
   // Extract all repairs and observations for single-line summary
   const repairsArray: string[] = [];
@@ -212,7 +239,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
   MAINTENANCE_CATEGORIES.forEach(cat => {
     cat.items.forEach(itemName => {
       const key = `${cat.id}-${itemName.toLowerCase().replace(/\s+/g, '_')}`;
-      const it = apartment.items ? apartment.items[key] : null;
+      const it = localApartment.items ? localApartment.items[key] : null;
       if (it?.status === 'sim') {
         repairsArray.push(`${cat.name} (${itemName})`);
       }
@@ -224,12 +251,12 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
 
   const repairsSummaryText = repairsArray.length > 0 ? repairsArray.join(' | ') : 'Nenhum reparo necessário';
   const observationsSummaryText = observationsArray.length > 0 ? observationsArray.join(' | ') : 'Nenhuma observação informada';
-  const dateFormatted = apartment.updatedAt ? new Date(apartment.updatedAt).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR');
+  const dateFormatted = localApartment.updatedAt ? new Date(localApartment.updatedAt).toLocaleDateString('pt-BR') : new Date().toLocaleDateString('pt-BR');
 
   // Finalize inspection and store in history database with strict validations
-  const handleFinalize = () => {
+  const initiateFinalization = () => {
     // Validation: Check for repairs ('SIM')
-    const hasRepairs = (Object.values(apartment.items || {}) as InspectionItemState[]).some(item => item.status === 'sim');
+    const hasRepairs = (Object.values(localApartment.items || {}) as InspectionItemState[]).some(item => item.status === 'sim');
     
     if (hasRepairs) {
       setValidationError(`A planilha só pode ser finalizada quando NÃO houver reparos pendentes (itens marcados com "SIM"). Verifique os itens e altere para "NÃO" quando o reparo for realizado.`);
@@ -243,6 +270,14 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
     }
 
     setValidationError(null);
+    setShowPasswordModal(true);
+  };
+
+  const confirmFinalization = () => {
+    if (isProcessingFinalization || localApartment.status === 'finalizada') return;
+
+    setIsProcessingFinalization(true);
+    setIsFinalizing(false);
 
     const now = new Date();
     const isoString = now.toISOString();
@@ -250,18 +285,18 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
     const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
     const finalizedRecord: FinalizedInspection = {
-      id: `${apartment.apartmentId}_${Date.now()}`,
-      apartmentId: apartment.apartmentId,
-      block: apartment.block,
-      number: apartment.number,
-      floor: apartment.floor,
-      inspectorName: apartment.inspectorName || 'Técnico Unila',
-      occupancyStatus: apartment.occupancyStatus,
-      keyCount: apartment.keyCount,
+      id: `${localApartment.apartmentId}_${Date.now()}`,
+      apartmentId: localApartment.apartmentId,
+      block: localApartment.block,
+      number: localApartment.number,
+      floor: localApartment.floor,
+      inspectorName: localApartment.inspectorName || 'Técnico Unila',
+      occupancyStatus: localApartment.occupancyStatus,
+      keyCount: localApartment.keyCount,
       finalizedAt: isoString,
       inspectionDate: dateStr,
       inspectionTime: timeStr,
-      items: apartment.items,
+      items: localApartment.items,
       simCount,
       naoCount,
       pendingCount
@@ -270,7 +305,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
     saveFinalizedInspection(finalizedRecord);
 
     onUpdateApartment({
-      ...apartment,
+      ...localApartment,
       isGenerated: false,
       isSaved: true,
       isLocked: true,
@@ -285,7 +320,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
   // Delete current spreadsheet
   const handleDeleteSpreadsheet = () => {
     if (onDeleteApartmentSheet) {
-      onDeleteApartmentSheet(apartment.apartmentId);
+      onDeleteApartmentSheet(localApartment.apartmentId);
     }
     setShowDeleteModal(false);
     onBack();
@@ -296,10 +331,11 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
   return (
     <div className="space-y-6">
 
+
       {/* Main Spreadsheet Card */}
       <div className="bg-white border-2 border-purple-800 rounded-2xl shadow-lg overflow-hidden print:border-none print:shadow-none print:rounded-none">
         
-        {/* Printable Standardized Header & In-Line Summary Box */}
+                {/* Printable Standardized Header & In-Line Summary Box */}
         <div className="hidden print:block mb-4 text-black border-2 border-black p-4">
           <div className="flex items-center justify-between border-b-2 border-black pb-2 mb-3">
             <div>
@@ -308,16 +344,16 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
             </div>
             <div className="text-right text-xs">
               <div className="font-bold">Data: {dateFormatted}</div>
-              <div>Vistoriador: <strong>{apartment.inspectorName || 'Não informado'}</strong></div>
+              <div>Vistoriador: <strong>{localApartment.inspectorName || 'Não informado'}</strong></div>
             </div>
           </div>
 
           {/* Resumo Geral em Linha com os 5 dados solicitados */}
           <div className="space-y-1.5 text-xs">
             <div className="grid grid-cols-3 gap-2 bg-gray-100 p-2 border border-gray-400 font-semibold">
-              <div><strong>Nº Apartamento:</strong> {apartment.apartmentId} (Bloco {apartment.block} • {apartment.floor})</div>
-              <div><strong>Status:</strong> {(apartment.occupancyStatus || 'Não informado').toUpperCase()}</div>
-              <div><strong>Chaves:</strong> {apartment.keyCount || 'Não informado'}</div>
+              <div><strong>Nº Apartamento:</strong> {localApartment.apartmentId} (Bloco {localApartment.block} • {localApartment.floor})</div>
+              <div><strong>Status:</strong> {(localApartment.occupancyStatus || 'Não informado').toUpperCase()}</div>
+              <div><strong>Chaves:</strong> {localApartment.keyCount || 'Não informado'}</div>
             </div>
             <div className="border border-gray-400 p-2 bg-gray-50 space-y-1">
               <div><strong>Reparos Realizados (SIM):</strong> <span className="font-semibold text-red-900">{repairsSummaryText}</span></div>
@@ -327,7 +363,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
         </div>
 
         {/* Lock Banner / Finalized Banner Warning */}
-        {apartment.status === 'finalizada' ? (
+        {localApartment.status === 'finalizada' ? (
           <div className="bg-emerald-900 text-emerald-100 border-b-2 border-emerald-700 px-4 py-3 text-xs font-bold flex items-center justify-between gap-2 print:hidden shadow-inner">
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -347,151 +383,99 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
           </div>
         ) : null}
 
-        {/* Spreadsheet Purple Banner */}
-        <div className="bg-gradient-to-r from-purple-900 via-purple-800 to-indigo-950 text-white p-5 print:hidden">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-2xl font-black tracking-widest text-white border-b-2 border-purple-400 pb-0.5">
-                  UNILA
-                </span>
-                <span className="text-xs bg-purple-700 text-purple-100 px-2 py-0.5 rounded-md font-semibold">
-                  PLANILHA DE MANUTENÇÃO
-                </span>
-                {apartment.status === 'finalizada' ? (
-                  <span className="text-xs bg-emerald-600 text-white px-2 py-0.5 rounded-md font-bold flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> Finalizada
-                  </span>
-                ) : isLocked ? (
-                  <span className="text-xs bg-amber-500 text-amber-950 px-2 py-0.5 rounded-md font-bold flex items-center gap-1">
-                    <Lock className="w-3 h-3" /> Bloqueada
-                  </span>
-                ) : null}
-              </div>
-              <h2 className="text-xl sm:text-2xl font-extrabold mt-1 text-purple-50">
-                Vistoria do Apartamento {apartment.apartmentId}
-              </h2>
-            </div>
-
-            {/* Progress Badge and Actions */}
-            <div className="bg-purple-950/70 border border-purple-600/60 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <div className="text-xs text-purple-200 font-medium">Progresso da Vistoria</div>
-                <div className="flex items-center gap-3 mt-1">
-                  <div className="w-32 bg-purple-900 rounded-full h-2.5 overflow-hidden border border-purple-600/40">
-                    <div
-                      className="bg-emerald-400 h-2.5 rounded-full transition-all duration-300"
-                      style={{ width: `${progressPercent}%` }}
-                    />
-                  </div>
-                  <span className="text-sm font-bold text-white font-mono">{progressPercent}%</span>
-                </div>
-                <div className="text-[11px] text-purple-300 mt-1">
-                  {simCount + naoCount} de {totalCount} itens verificados {pendingCount > 0 ? `(${pendingCount} pendentes)` : '(Completo)'}
-                </div>
-              </div>
-
-              {/* Botões Salvar */}
-              <div className="flex items-center gap-2 pt-2 sm:pt-0 border-t sm:border-t-0 sm:border-l border-purple-700/60 sm:pl-4 w-full sm:w-auto justify-end flex-wrap">
-                {!isLocked && (
-                  <button
-                    onClick={handleSaveSpreadsheet}
-                    className="px-3 py-2 bg-amber-400 hover:bg-amber-300 text-purple-950 font-black rounded-lg text-xs flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-                    title="Salvar planilha e bloquear edição aberta (modificações futuras apenas pelo botão Reparos)"
-                  >
-                    <Save className="w-3.5 h-3.5 text-purple-900" />
-                    <span>Salvar Planilha</span>
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Excel Header Metadata Table */}
         <div className="bg-purple-50/70 border-b-2 border-purple-200 p-3 sm:p-4 print:hidden">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            
-            {/* Apt & Block Info */}
-            <div className="bg-white p-2 rounded-xl border border-purple-200 shadow-2xs flex items-center gap-2">
-              <div className="w-10 h-10 rounded-xl bg-purple-900 text-white font-black text-lg flex items-center justify-center shrink-0">
-                {apartment.apartmentId}
-              </div>
-              <div>
-                <span className="text-[10px] text-purple-700 font-bold uppercase tracking-wider block">Loc.</span>
-                <span className="text-xs font-bold text-gray-900">
-                  {apartment.block} • {apartment.floor}
-                </span>
-              </div>
-            </div>
-
-            {/* Inspector Name Input */}
-            <div className="bg-white p-2 rounded-xl border border-purple-200 shadow-2xs flex items-center gap-2">
-              <User className="w-4 h-4 text-purple-700 shrink-0" />
-              <div className="w-full">
-                <label className="text-[10px] text-purple-700 font-bold uppercase tracking-wider block">
-                  Responsável
-                </label>
-                <input
-                  type="text"
-                  disabled={isLocked}
-                  readOnly={isLocked}
-                  value={apartment.inspectorName || ''}
-                  onChange={(e) => handleInspectorChange(e.target.value)}
-                  placeholder={isLocked ? 'Não informado' : 'Nome...'}
-                  className={`w-full text-xs font-semibold text-gray-900 focus:outline-none focus:ring-1 focus:ring-purple-600 rounded px-1 py-0.5 ${
-                    isLocked ? 'bg-gray-100 text-gray-700 cursor-not-allowed' : 'bg-purple-50/30'
-                  }`}
-                />
-              </div>
-            </div>
-
-            {/* Date & Time */}
-            <div className="bg-white p-2 rounded-xl border border-purple-200 shadow-2xs flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-purple-700 shrink-0" />
-              <div>
-                <span className="text-[10px] text-purple-700 font-bold uppercase tracking-wider block">
-                  Data
-                </span>
-                <span className="text-xs font-semibold text-gray-900">
-                  {apartment.updatedAt ? new Date(apartment.updatedAt).toLocaleDateString('pt-BR') : 'Hoje'}
-                </span>
-              </div>
-            </div>
-            
-            {/* Occupancy & Keys */}
-            <div className="bg-white p-2 rounded-xl border border-purple-200 shadow-2xs flex items-center gap-2">
-                <div className="flex flex-col gap-1 w-full">
-                    <select
-                        disabled={isLocked}
-                        value={apartment.occupancyStatus || ''}
-                        onChange={(e) => handleOccupancyChange(e.target.value as 'ocupado' | 'desocupado')}
-                        className={`w-full text-[10px] text-gray-800 focus:outline-none focus:ring-1 focus:ring-purple-600 rounded p-0.5 border border-gray-200 ${
-                        isLocked ? 'bg-gray-100 text-gray-600 cursor-not-allowed' : 'bg-gray-50'
-                        }`}
-                    >
-                        <option value="">Status...</option>
-                        <option value="ocupado">Ocupado</option>
-                        <option value="desocupado">Desocupado</option>
-                    </select>
-                    <select
-                        disabled={isLocked}
-                        value={apartment.keyCount || ''}
-                        onChange={(e) => handleKeyCountChange(e.target.value as '1 chave' | '2 chave' | '3 chave' | '4 chave' | '5 chave')}
-                        className={`w-full text-[10px] text-gray-800 focus:outline-none focus:ring-1 focus:ring-purple-600 rounded p-0.5 border border-gray-200 ${
-                        isLocked ? 'bg-gray-100 text-gray-600 cursor-not-allowed' : 'bg-gray-50'
-                        }`}
-                    >
-                        <option value="">Chaves...</option>
-                        <option value="1 chave">1 chave</option>
-                        <option value="2 chave">2 chave</option>
-                        <option value="3 chave">3 chave</option>
-                        <option value="4 chave">4 chave</option>
-                        <option value="5 chave">5 chave</option>
-                    </select>
+          <button
+            onClick={() => setIsMetadataOpen(!isMetadataOpen)}
+            className="flex items-center gap-2 w-full text-purple-900 font-bold text-xs mb-2"
+          >
+            {isMetadataOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            <span>{isMetadataOpen ? 'Ocultar Detalhes do Apartamento' : 'Mostrar Detalhes do Apartamento'}</span>
+          </button>
+          {isMetadataOpen && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 animate-fadeIn">
+              
+               {/* Apt & Block Info */}
+              <div className="bg-white p-2 rounded-xl border border-purple-200 shadow-2xs flex items-center gap-2">
+                <div className="w-10 h-10 rounded-xl bg-purple-900 text-white font-black text-lg flex items-center justify-center shrink-0">
+                  {localApartment.apartmentId}
                 </div>
+                <div>
+                  <span className="text-[10px] text-purple-700 font-bold uppercase tracking-wider block">Loc.</span>
+                  <span className="text-xs font-bold text-gray-900">
+                    {localApartment.block} • {localApartment.floor}
+                  </span>
+                </div>
+              </div>
+
+              {/* Inspector Name Input */}
+              <div className="bg-white p-2 rounded-xl border border-purple-200 shadow-2xs flex items-center gap-2">
+                <User className="w-4 h-4 text-purple-700 shrink-0" />
+                <div className="w-full">
+                  <label className="text-[10px] text-purple-700 font-bold uppercase tracking-wider block">
+                    Responsável
+                  </label>
+                  <input
+                    type="text"
+                    disabled={isLocked}
+                    readOnly={isLocked}
+                    value={localApartment.inspectorName || ''}
+                    onChange={(e) => handleInspectorChange(e.target.value)}
+                    placeholder={isLocked ? 'Não informado' : 'Nome...'}
+                    className={`w-full text-xs font-semibold text-gray-900 focus:outline-none focus:ring-1 focus:ring-purple-600 rounded px-1 py-0.5 ${
+                      isLocked ? 'bg-gray-100 text-gray-700 cursor-not-allowed' : 'bg-purple-50/30'
+                    }`}
+                  />
+                </div>
+              </div>
+
+              {/* Date & Time */}
+              <div className="bg-white p-2 rounded-xl border border-purple-200 shadow-2xs flex items-center gap-2">
+                <Calendar className="w-4 h-4 text-purple-700 shrink-0" />
+                <div>
+                  <span className="text-[10px] text-purple-700 font-bold uppercase tracking-wider block">
+                    Data
+                  </span>
+                  <span className="text-xs font-semibold text-gray-900">
+                    {localApartment.updatedAt ? new Date(localApartment.updatedAt).toLocaleDateString('pt-BR') : 'Hoje'}
+                  </span>
+                </div>
+              </div>
+              
+              {/* Occupancy & Keys */}
+              <div className="bg-white p-2 rounded-xl border border-purple-200 shadow-2xs flex items-center gap-2">
+                  <div className="flex flex-col gap-1 w-full">
+                      <select
+                          disabled={isLocked}
+                          value={localApartment.occupancyStatus || ''}
+                          onChange={(e) => handleOccupancyChange(e.target.value as 'ocupado' | 'desocupado')}
+                          className={`w-full text-[10px] text-gray-800 focus:outline-none focus:ring-1 focus:ring-purple-600 rounded p-0.5 border border-gray-200 ${
+                          isLocked ? 'bg-gray-100 text-gray-600 cursor-not-allowed' : 'bg-gray-50'
+                          }`}
+                      >
+                          <option value="">Status...</option>
+                          <option value="ocupado">Ocupado</option>
+                          <option value="desocupado">Desocupado</option>
+                      </select>
+                      <select
+                          disabled={isLocked}
+                          value={localApartment.keyCount || ''}
+                          onChange={(e) => handleKeyCountChange(e.target.value as '1 chave' | '2 chave' | '3 chave' | '4 chave' | '5 chave')}
+                          className={`w-full text-[10px] text-gray-800 focus:outline-none focus:ring-1 focus:ring-purple-600 rounded p-0.5 border border-gray-200 ${
+                          isLocked ? 'bg-gray-100 text-gray-600 cursor-not-allowed' : 'bg-gray-50'
+                          }`}
+                      >
+                          <option value="">Chaves...</option>
+                          <option value="1 chave">1 chave</option>
+                          <option value="2 chave">2 chave</option>
+                          <option value="3 chave">3 chave</option>
+                          <option value="4 chave">4 chave</option>
+                          <option value="5 chave">5 chave</option>
+                      </select>
+                  </div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Spreadsheet Table */}
@@ -523,8 +507,8 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                 let catNao = 0;
                 catCategory.items.forEach(item => {
                   const k = `${catCategory.id}-${item.toLowerCase().replace(/\s+/g, '_')}`;
-                  if (apartment.items[k]?.status === 'sim') catSim++;
-                  if (apartment.items[k]?.status === 'nao') catNao++;
+                  if (localApartment.items[k]?.status === 'sim') catSim++;
+                  if (localApartment.items[k]?.status === 'nao') catNao++;
                 });
 
                 return (
@@ -550,7 +534,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                       rowCounter++;
                       const currentCounter = rowCounter;
                       const itemKey = `${catCategory.id}-${itemName.toLowerCase().replace(/\s+/g, '_')}`;
-                      const itemState = apartment.items[itemKey] || {
+                      const itemState = localApartment.items[itemKey] || {
                         id: itemKey,
                         category: catCategory.name,
                         name: itemName,
@@ -575,17 +559,17 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
 
                           {/* Print Only: Apt Number */}
                           <td className="hidden print:table-cell py-2 px-2 font-bold text-xs text-black border-r border-gray-200">
-                            {apartment.apartmentId}
+                            {localApartment.apartmentId}
                           </td>
 
                           {/* Print Only: Occupancy Status */}
                           <td className="hidden print:table-cell py-2 px-2 uppercase text-[11px] font-semibold text-black border-r border-gray-200">
-                            {apartment.occupancyStatus || '-'}
+                            {localApartment.occupancyStatus || '-'}
                           </td>
 
                           {/* Print Only: Keys */}
                           <td className="hidden print:table-cell py-2 px-2 text-[11px] font-medium text-black border-r border-gray-200">
-                            {apartment.keyCount || '-'}
+                            {localApartment.keyCount || '-'}
                           </td>
 
                           {/* Category Name */}
@@ -667,6 +651,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                                 readOnly={isLocked}
                                 value={itemState.observation || ''}
                                 onChange={(e) => handleItemChange(itemKey, 'observation', e.target.value)}
+                                onBlur={(e) => saveObservationSuggestion(e.target.value)}
                                 onFocus={() => !isLocked && setActiveObservationField(itemKey)}
                                 placeholder={isLocked ? '' : (isSim ? 'Descreva o problema / observação...' : 'Observações (opcional)...')}
                                 className={`w-full py-1.5 px-2.5 text-xs rounded-lg border focus:outline-none focus:ring-2 focus:ring-purple-600 print:hidden ${
@@ -706,7 +691,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                                         </button>
                                       </div>
                                       <div className="max-h-40 overflow-y-auto space-y-1">
-                                        {COMMON_OBSERVATION_SUGGESTIONS.map((sug) => (
+                                        {userSuggestions.map((sug) => (
                                           <button
                                             key={sug}
                                             type="button"
@@ -742,37 +727,31 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
         {/* Bottom Action Bar (At the end of the spreadsheet) */}
         <div className="bg-white border border-purple-200 rounded-2xl p-4 sm:p-5 shadow-md flex flex-col lg:flex-row items-center justify-between gap-4 print:hidden">
 
+          {/* Left: Quick Export / PDF Tool */}
+          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-center lg:justify-start">
+            <button
+              onClick={() => exportApartmentToPDF(localApartment)}
+              className="px-4 py-2.5 bg-purple-900 hover:bg-purple-800 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer"
+              title="Baixar a planilha completa de vistoria com cabeçalho e observações em formato PDF"
+            >
+              <Download className="w-4 h-4 text-amber-300" />
+              <span>Baixar como PDF</span>
+            </button>
+          </div>
 
+          {/* Right: State / Finalization Actions */}
           <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto justify-center lg:justify-end">
-            {/* Quick Export / Print Tools */}
 
-            {apartment.status === 'finalizada' ? (
+            {localApartment.status === 'finalizada' && userRole === 'admin' ? (
               <>
-                <div className="flex items-center gap-2 text-xs font-bold text-emerald-950 bg-emerald-100 px-4 py-2.5 rounded-xl border border-emerald-300">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-700" />
-                  <span>Vistoria Finalizada</span>
-                </div>
-
-                {onStartNewInspection && (
-                  <button
-                    onClick={() => onStartNewInspection(apartment.apartmentId)}
-                    className="px-4 py-2.5 bg-purple-900 hover:bg-purple-800 text-white font-bold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer"
-                    title="Criar nova planilha para uma nova vistoria deste apartamento em uma nova data"
-                  >
-                    <PlusCircle className="w-4 h-4 text-amber-300" />
-                    <span>Nova Vistoria (Nova Data)</span>
-                  </button>
-                )}
-
-                {onGoToHistory && (
-                  <button
-                    onClick={onGoToHistory}
-                    className="px-4 py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-900 font-bold rounded-xl text-xs sm:text-sm flex items-center gap-2 border border-purple-200 transition-colors cursor-pointer"
-                  >
-                    <History className="w-4 h-4 text-purple-700" />
-                    <span>Banco de Vistorias</span>
-                  </button>
-                )}
+                <button
+                  onClick={() => setShowReopenPasswordModal(true)}
+                  className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95 border border-amber-500 cursor-pointer"
+                  title="Reabrir vistoria para edição (Requer senha de administrador)"
+                >
+                  <Unlock className="w-4 h-4 text-amber-100" />
+                  <span>Reabrir Vistoria</span>
+                </button>
               </>
             ) : isLocked ? (
               <>
@@ -782,14 +761,16 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                 </div>
 
                 {/* Botão Finalizar Vistoria */}
-                <button
-                  onClick={handleFinalize}
-                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95 border border-emerald-500 cursor-pointer"
-                  title="Finalizar esta vistoria e armazenar no banco de dados"
-                >
-                  <FileCheck className="w-4 h-4 text-emerald-100" />
-                  <span>Finalizar Vistoria</span>
-                </button>
+                {userRole === 'admin' && (
+                  <button
+                    onClick={initiateFinalization}
+                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95 border border-emerald-500 cursor-pointer"
+                    title="Finalizar esta vistoria e armazenar no banco de dados"
+                  >
+                    <FileCheck className="w-4 h-4 text-emerald-100" />
+                    <span>Finalizar Vistoria</span>
+                  </button>
+                )}
               </>
             ) : (
               <>
@@ -805,7 +786,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
 
                 {/* Botão Finalizar Vistoria */}
                 <button
-                  onClick={handleFinalize}
+                  onClick={initiateFinalization}
                   className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95 border border-emerald-500 cursor-pointer"
                   title="Finalizar esta vistoria e armazenar no banco de dados"
                 >
@@ -818,6 +799,140 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
         </div>
 
       </div>
+
+      {/* Finalization Confirmation Modal */}
+      {isFinalizing && (
+        <div className="fixed inset-0 bg-purple-950/90 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border-4 border-emerald-500 text-center space-y-5">
+            <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+              <FileCheck className="w-10 h-10" />
+            </div>
+
+            <div>
+              <h3 className="text-xl font-extrabold text-purple-950">
+                Confirmar Finalização?
+              </h3>
+              <p className="text-xs sm:text-sm text-gray-600 mt-2 leading-relaxed">
+                Ao confirmar, a vistoria do <strong>Apartamento {localApartment.apartmentId}</strong> será permanentemente finalizada e bloqueada para edições.
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setIsFinalizing(false)}
+                className="flex-1 py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl text-xs sm:text-sm transition-colors cursor-pointer"
+              >
+                Voltar e Revisar
+              </button>
+              <button
+                onClick={confirmFinalization}
+                className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs sm:text-sm shadow-md transition-all active:scale-95 cursor-pointer"
+              >
+                Confirmar Finalização
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Finalization Prompt Modal */}
+      {showFinalizationPrompt && (
+        <div className="fixed inset-0 bg-purple-950/90 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border-4 border-emerald-500 text-center space-y-5">
+            <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+              <FileCheck className="w-10 h-10" />
+            </div>
+
+            <div>
+              <h3 className="text-xl font-extrabold text-purple-950">
+                Vistoria Concluída! Deseja Finalizar?
+              </h3>
+              <p className="text-xs sm:text-sm text-gray-600 mt-2 leading-relaxed">
+                Todos os itens foram respondidos. Deseja finalizar a vistoria do <strong>Apartamento {localApartment.apartmentId}</strong> agora?
+              </p>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setShowFinalizationPrompt(false)}
+                className="flex-1 py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl text-xs sm:text-sm transition-colors cursor-pointer"
+              >
+                Não, Revisar Mais
+              </button>
+              <button
+                onClick={() => {
+                  setShowFinalizationPrompt(false);
+                  initiateFinalization();
+                }}
+                className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs sm:text-sm shadow-md transition-all active:scale-95 cursor-pointer"
+              >
+                Sim, Finalizar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Password Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 bg-purple-950/90 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl border-4 border-purple-800 text-center space-y-5">
+            <div className="w-16 h-16 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+              <Lock className="w-10 h-10" />
+            </div>
+
+            <div>
+              <h3 className="text-xl font-extrabold text-purple-950">
+                Senha de Finalização
+              </h3>
+              <p className="text-xs text-gray-600 mt-2">
+                Digite a senha para confirmar a finalização da vistoria.
+              </p>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setPasswordError(false);
+                }}
+                className={`w-full mt-4 p-3 border-2 rounded-xl text-center text-lg font-mono font-bold ${
+                  passwordError ? 'border-red-500 bg-red-50' : 'border-purple-200 focus:ring-purple-500 focus:border-purple-500'
+                }`}
+                placeholder="****"
+              />
+              {passwordError && <p className="text-red-500 text-xs mt-2 font-bold">Senha incorreta!</p>}
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setShowPasswordModal(false);
+                  setPassword('');
+                  setPasswordError(false);
+                }}
+                className="flex-1 py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl text-xs sm:text-sm transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (password === '4526') {
+                    setShowPasswordModal(false);
+                    setPassword('');
+                    setIsFinalizing(true);
+                  } else {
+                    setPasswordError(true);
+                    setPassword('');
+                  }
+                }}
+                className="flex-1 py-3 px-4 bg-purple-900 hover:bg-purple-800 text-white font-extrabold rounded-xl text-xs sm:text-sm shadow-md transition-all active:scale-95 cursor-pointer"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Validation Error Modal */}
       {validationError && (
@@ -859,7 +974,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                 Vistoria Finalizada com Sucesso!
               </h3>
               <p className="text-xs sm:text-sm text-gray-600 mt-2 leading-relaxed">
-                A planilha de vistoria do <strong>Apartamento {apartment.apartmentId}</strong> foi armazenada no banco de dados para pesquisa e consultas futuras.
+                A planilha de vistoria do <strong>Apartamento {localApartment.apartmentId}</strong> foi armazenada no banco de dados para pesquisa e consultas futuras.
               </p>
             </div>
 
@@ -870,15 +985,15 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Vistoriador:</span>
-                <strong className="text-purple-950">{apartment.inspectorName || 'Técnico Unila'}</strong>
+                <strong className="text-purple-950">{localApartment.inspectorName || 'Técnico Unila'}</strong>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Status do Apartamento:</span>
-                <strong className="text-purple-950 capitalize">{apartment.occupancyStatus || 'Não informado'}</strong>
+                <strong className="text-purple-950 capitalize">{localApartment.occupancyStatus || 'Não informado'}</strong>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Quantidade de Chaves:</span>
-                <strong className="text-purple-950">{apartment.keyCount || 'Não informado'}</strong>
+                <strong className="text-purple-950">{localApartment.keyCount || 'Não informado'}</strong>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-600">Itens em Ordem (NÃO):</span>
@@ -888,6 +1003,14 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
 
             {/* Modal Actions */}
             <div className="space-y-2.5 pt-2">
+              <button
+                onClick={() => exportApartmentToPDF(localApartment)}
+                className="w-full py-2.5 px-4 bg-purple-900 hover:bg-purple-800 text-white font-extrabold rounded-xl text-xs sm:text-sm shadow-md flex items-center justify-center gap-2 transition-all active:scale-95 cursor-pointer"
+              >
+                <Download className="w-4 h-4 text-amber-300" />
+                <span>Baixar Vistoria como PDF</span>
+              </button>
+
               {onGoToHistory && (
                 <button
                   onClick={() => {
@@ -944,7 +1067,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                 Excluir Planilha de Vistoria
               </h3>
               <p className="text-xs sm:text-sm text-gray-600 mt-2 leading-relaxed">
-                Tem certeza que deseja excluir a planilha de vistoria do <strong>Apartamento {apartment.apartmentId}</strong>? Esta ação não poderá ser desfeita.
+                Tem certeza que deseja excluir a planilha de vistoria do <strong>Apartamento {localApartment.apartmentId}</strong>? Esta ação não poderá ser desfeita.
               </p>
             </div>
 
@@ -962,6 +1085,81 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                 className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs sm:text-sm transition-colors shadow-md cursor-pointer"
               >
                 Sim, Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reopen Password Modal */}
+      {showReopenPasswordModal && (
+        <div className="fixed inset-0 bg-purple-950/90 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl border-4 border-amber-500 text-center space-y-5">
+            <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+              <Unlock className="w-10 h-10" />
+            </div>
+
+            <div>
+              <h3 className="text-xl font-extrabold text-purple-950">
+                Senha de Administrador
+              </h3>
+              <p className="text-xs text-gray-600 mt-2">
+                Digite a senha de administrador para reabrir esta vistoria.
+              </p>
+              <input
+                type="password"
+                value={reopenPassword}
+                onChange={(e) => {
+                  setReopenPassword(e.target.value);
+                  setReopenPasswordError(false);
+                }}
+                className={`w-full mt-4 p-3 border-2 rounded-xl text-center text-lg font-mono font-bold ${
+                  reopenPasswordError ? 'border-red-500 bg-red-50' : 'border-amber-200 focus:ring-amber-500 focus:border-amber-500'
+                }`}
+                placeholder="****"
+              />
+              {reopenPasswordError && <p className="text-red-500 text-xs mt-2 font-bold">Senha incorreta!</p>}
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => {
+                  setShowReopenPasswordModal(false);
+                  setReopenPassword('');
+                  setReopenPasswordError(false);
+                }}
+                className="flex-1 py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl text-xs sm:text-sm transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => {
+                  if (reopenPassword === '2645') {
+                    setShowReopenPasswordModal(false);
+                    setReopenPassword('');
+                    setReopenPasswordError(false);
+                    
+                    const nowIsoString = new Date().toISOString();
+                    onUpdateApartment({
+                      ...localApartment,
+                      isGenerated: true,
+                      isSaved: true,
+                      isLocked: false,
+                      status: 'em andamento',
+                      finalizedAt: undefined,
+                      updatedAt: nowIsoString
+                    });
+                    
+                    setToastMessage('Vistoria reaberta com sucesso!');
+                    setShowSavedToast(true);
+                  } else {
+                    setReopenPasswordError(true);
+                    setReopenPassword('');
+                  }
+                }}
+                className="flex-1 py-3 px-4 bg-amber-600 hover:bg-amber-700 text-white font-extrabold rounded-xl text-xs sm:text-sm shadow-md transition-all active:scale-95 cursor-pointer"
+              >
+                Reabrir Vistoria
               </button>
             </div>
           </div>

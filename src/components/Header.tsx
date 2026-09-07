@@ -24,8 +24,8 @@ export const Header: React.FC<HeaderProps> = ({
           
           {/* Left: Logo & Title */}
           <div className="flex items-center gap-2.5">
-            <div className="bg-white p-1.5 rounded-lg text-purple-900 shadow-xs flex items-center justify-center">
-              <FileSpreadsheet className="w-5 h-5 text-purple-700" />
+            <div className="bg-white p-1 rounded-lg shadow-xs flex items-center justify-center overflow-hidden w-8 h-8">
+              <img src="/logo.jpg" alt="Logo" className="w-full h-full object-contain" />
             </div>
             <div>
               <div className="flex items-center gap-1.5">

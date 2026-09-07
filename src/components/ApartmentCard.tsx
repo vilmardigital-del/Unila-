@@ -173,14 +173,7 @@ export const ApartmentCard: React.FC<ApartmentCardProps> = ({
       <div className="mt-4 pt-3 border-t border-gray-100">
         {isFinalized ? (
           <div className="flex items-center gap-1.5 w-full flex-wrap sm:flex-nowrap">
-            <button
-              onClick={() => onSelect(apartment.apartmentId)}
-              className="flex-1 py-2 px-3 bg-purple-100 hover:bg-purple-200 text-purple-900 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 border border-purple-200 cursor-pointer"
-              title="Visualizar a vistoria arquivada no histórico"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-purple-700" />
-              <span>Ver Vistoria</span>
-            </button>
+            {/* No actions for finalized inspection */}
             <button
               onClick={() => onGenerate(apartment.apartmentId)}
               className="flex-1 py-2 px-3 bg-purple-900 hover:bg-purple-800 text-white font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"

@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import { ApartmentInspection, InspectionItemState } from '../types';
 import { MAINTENANCE_CATEGORIES } from '../data/categories';
-import { exportAllApartmentsSummaryToCSV } from '../utils/excel';
 
 interface GeneralDashboardProps {
   apartments: ApartmentInspection[];
