@@ -23,22 +23,24 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2.5">
           
           {/* Left: Logo & Title */}
-          <div className="flex items-center gap-2.5">
-            <div className="bg-white p-1 rounded-lg shadow-xs flex items-center justify-center overflow-hidden w-8 h-8">
-              <img src="/logo.jpg" alt="Logo" className="w-full h-full object-contain" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h1 className="text-base sm:text-lg font-black tracking-tight font-sans">
-                  UNILA
-                </h1>
-                <span className="bg-purple-700/90 text-purple-100 text-[10px] font-semibold px-2 py-0.2 rounded-full border border-purple-400">
-                  Manutenção
-                </span>
+          <div className="flex items-center justify-between w-full lg:w-auto">
+            <div className="flex items-center gap-2.5">
+              <div className="bg-white p-1 rounded-lg shadow-xs flex items-center justify-center overflow-hidden w-8 h-8">
+                <img src="/logo.jpg" alt="Logo" className="w-full h-full object-contain" />
               </div>
-              <p className="text-[11px] text-purple-200 leading-tight">
-                Vistorias (Blocos A, B e E)
-              </p>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <h1 className="text-base sm:text-lg font-black tracking-tight font-sans">
+                    UNILA
+                  </h1>
+                  <span className="bg-purple-700/90 text-purple-100 text-[10px] font-semibold px-2 py-0.2 rounded-full border border-purple-400">
+                    Manutenção
+                  </span>
+                </div>
+                <p className="text-[11px] text-purple-200 leading-tight">
+                  Vistorias (Blocos A, B e E)
+                </p>
+              </div>
             </div>
           </div>
 

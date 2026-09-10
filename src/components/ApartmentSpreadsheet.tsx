@@ -35,7 +35,6 @@ interface ApartmentSpreadsheetProps {
   onGoToHistory?: () => void;
   onDeleteApartmentSheet?: (apartmentId: string) => void;
   onStartNewInspection?: (apartmentId: string) => void;
-  userRole: 'admin' | 'user';
 }
 
 export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
@@ -44,8 +43,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
   onBack,
   onGoToHistory,
   onDeleteApartmentSheet,
-  onStartNewInspection,
-  userRole
+  onStartNewInspection
 }) => {
   const [activeObservationField, setActiveObservationField] = useState<string | null>(null);
   const [expandedRows, setExpandedRows] = useState<string[]>([]);
@@ -480,21 +478,21 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
 
         {/* Spreadsheet Table */}
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-left text-xs sm:text-sm print:text-xs">
+          <table className="w-full border-collapse text-left print:text-xs text-[10px] sm:text-xs md:text-sm">
             
             {/* Table Column Headers */}
             <thead>
-              <tr className="bg-purple-900 text-white font-bold text-xs uppercase tracking-wider border-b-2 border-purple-950 print:bg-gray-200 print:text-black print:border-black">
-                <th className="py-3 px-3 w-12 text-center border-r border-purple-800 print:border-gray-400">#</th>
-                <th className="hidden print:table-cell py-2 px-2 w-20 border-r border-purple-800 print:border-gray-400">Nº Apt</th>
-                <th className="hidden print:table-cell py-2 px-2 w-24 border-r border-purple-800 print:border-gray-400">Status</th>
-                <th className="hidden print:table-cell py-2 px-2 w-20 border-r border-purple-800 print:border-gray-400">Chaves</th>
-                <th className="py-3 px-4 w-32 border-r border-purple-800 print:border-gray-400">Categoria</th>
-                <th className="py-3 px-4 sm:w-64 border-r border-purple-800 print:border-gray-400">Item de Manutenção</th>
-                <th className="py-3 px-4 text-center w-56 sm:w-64 border-r border-purple-800 print:border-gray-400">
-                  Reparo Realizado?
+              <tr className="bg-purple-900 text-white font-bold uppercase tracking-wider border-b-2 border-purple-950 print:bg-gray-200 print:text-black print:border-black">
+                <th className="py-3 px-3 text-center border-r border-purple-800 print:border-gray-400 w-10 sm:w-12">#</th>
+                <th className="hidden print:table-cell py-2 px-2 border-r border-purple-800 print:border-gray-400 w-16 sm:w-20">Nº Apt</th>
+                <th className="hidden print:table-cell py-2 px-2 border-r border-purple-800 print:border-gray-400 w-20 sm:w-24">Status</th>
+                <th className="hidden print:table-cell py-2 px-2 border-r border-purple-800 print:border-gray-400 w-16 sm:w-20">Chaves</th>
+                <th className="py-3 px-4 border-r border-purple-800 print:border-gray-400 w-24 sm:w-32">Categoria</th>
+                <th className="py-3 px-4 border-r border-purple-800 print:border-gray-400 sm:w-64">Item</th>
+                <th className="py-3 px-4 text-center border-r border-purple-800 print:border-gray-400 w-24 sm:w-64">
+                  Reparo?
                 </th>
-                <th className="py-3 px-4">Observação Selecionada</th>
+                <th className="py-3 px-4">Obs</th>
               </tr>
             </thead>
 
@@ -742,7 +740,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
           {/* Right: State / Finalization Actions */}
           <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto justify-center lg:justify-end">
 
-            {localApartment.status === 'finalizada' && userRole === 'admin' ? (
+            {localApartment.status === 'finalizada' ? (
               <>
                 <button
                   onClick={() => setShowReopenPasswordModal(true)}
@@ -761,16 +759,14 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                 </div>
 
                 {/* Botão Finalizar Vistoria */}
-                {userRole === 'admin' && (
-                  <button
-                    onClick={initiateFinalization}
-                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95 border border-emerald-500 cursor-pointer"
-                    title="Finalizar esta vistoria e armazenar no banco de dados"
-                  >
-                    <FileCheck className="w-4 h-4 text-emerald-100" />
-                    <span>Finalizar Vistoria</span>
-                  </button>
-                )}
+                <button
+                  onClick={initiateFinalization}
+                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95 border border-emerald-500 cursor-pointer"
+                  title="Finalizar esta vistoria e armazenar no banco de dados"
+                >
+                  <FileCheck className="w-4 h-4 text-emerald-100" />
+                  <span>Finalizar Vistoria</span>
+                </button>
               </>
             ) : (
               <>

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Header } from './components/Header';
-import { LoginModal } from './components/LoginModal';
 import { ApartmentCard } from './components/ApartmentCard';
 import { CompactApartmentTable } from './components/CompactApartmentTable';
 import { ApartmentSpreadsheet } from './components/ApartmentSpreadsheet';
@@ -19,12 +18,6 @@ export default function App() {
   const [activeView, setActiveView] = useState<'search' | 'dashboard' | 'spreadsheet' | 'history' | 'quick-fix'>('search');
   const [selectedAptId, setSelectedAptId] = useState<string | null>(null);
   const [aptToDelete, setAptToDelete] = useState<string | null>(null);
-  
-  // Auth state
-  const [userRole, setUserRole] = useState<'admin' | 'user' | null>(null);
-  const [showLoginModal, setShowLoginModal] = useState(true);
-  const [loginPassword, setLoginPassword] = useState('');
-  const [loginError, setLoginError] = useState(false);
   
   // Unified Generation Modal State
   const [generationTarget, setGenerationTarget] = useState<string | 'FILTERED' | null>(null);
@@ -444,10 +437,6 @@ export default function App() {
     return apartments.find(a => a.apartmentId === selectedAptId) || null;
   }, [apartments, selectedAptId, historicalViewApt]);
 
-  if (showLoginModal) {
-    return <LoginModal onLogin={(role) => { setUserRole(role); setShowLoginModal(false); }} />;
-  }
-
   return (
     <div className="min-h-screen bg-purple-50/40 text-gray-900 flex flex-col font-sans selection:bg-purple-800 selection:text-white">
       
@@ -527,7 +516,6 @@ export default function App() {
             onGoToHistory={() => setActiveView('history')}
             onDeleteApartmentSheet={handleDeleteApartmentSheet}
             onStartNewInspection={handleStartNewInspectionForApartment}
-            userRole={userRole || 'user'}
           />
         )}
 
