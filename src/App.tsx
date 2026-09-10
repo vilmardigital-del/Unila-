@@ -18,6 +18,23 @@ export default function App() {
   const [activeView, setActiveView] = useState<'search' | 'dashboard' | 'spreadsheet' | 'history' | 'quick-fix'>('search');
   const [selectedAptId, setSelectedAptId] = useState<string | null>(null);
   const [aptToDelete, setAptToDelete] = useState<string | null>(null);
+  const [isExiting, setIsExiting] = useState(false);
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!isExiting) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isExiting]);
+
+  const handleExit = () => {
+    setIsExiting(true);
+    window.close();
+  };
   
   // Unified Generation Modal State
   const [generationTarget, setGenerationTarget] = useState<string | 'FILTERED' | null>(null);
@@ -451,6 +468,7 @@ export default function App() {
           setActiveView(view);
         }}
         selectedAptId={selectedAptId}
+        onExit={handleExit}
       />
 
       {/* Main Body */}
