@@ -1,5 +1,5 @@
 import React from 'react';
-import { ClipboardList, Building2, CheckCircle2, AlertTriangle, FileSpreadsheet, History, ArrowLeft, X } from 'lucide-react';
+import { ClipboardList, Building2, CheckCircle2, AlertTriangle, FileSpreadsheet, History, ArrowLeft } from 'lucide-react';
 
 interface HeaderProps {
   totalApartments: number;
@@ -8,7 +8,6 @@ interface HeaderProps {
   activeView: 'search' | 'dashboard' | 'spreadsheet' | 'history' | 'quick-fix';
   setActiveView: (view: 'search' | 'dashboard' | 'spreadsheet' | 'history' | 'quick-fix') => void;
   selectedAptId?: string | null;
-  onExit: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -17,7 +16,6 @@ export const Header: React.FC<HeaderProps> = ({
   simCountTotal,
   activeView,
   setActiveView,
-  onExit
 }) => {
   return (
     <header className="sticky top-0 z-50 bg-gradient-to-r from-purple-900 via-purple-800 to-indigo-900 text-white shadow-md border-b-2 border-purple-500 print:hidden">
@@ -55,14 +53,6 @@ export const Header: React.FC<HeaderProps> = ({
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
                 Voltar
-              </button>
-            
-            <button
-                onClick={onExit}
-                className="px-3 py-1.5 bg-red-600 text-white font-bold text-xs rounded-lg shadow-sm hover:bg-red-700 transition-colors flex items-center gap-1.5 cursor-pointer"
-              >
-                <X className="w-3.5 h-3.5" />
-                Fechar
               </button>
 
             {/* Compact Quick Stats */}
