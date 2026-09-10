@@ -25,7 +25,24 @@ export default function App() {
       event.returnValue = '';
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Block Zoom: Ctrl + Plus, Ctrl + Minus, Ctrl + Zero
+      if (event.ctrlKey && (event.key === '+' || event.key === '-' || event.key === '0' || event.key === '=')) {
+        event.preventDefault();
+      }
+      
+      // Block Reload: F5, Ctrl + R, F11
+      if (event.key === 'F5' || (event.ctrlKey && event.key.toLowerCase() === 'r') || event.key === 'F11') {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, []);
   
   // Unified Generation Modal State
