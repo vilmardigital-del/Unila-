@@ -15,6 +15,7 @@ import { Sparkles, Building2, Search, PlusCircle, CheckCircle2, Trash2, User, Ho
 
 export default function App() {
   const [apartments, setApartments] = useState<ApartmentInspection[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeView, setActiveView] = useState<'search' | 'dashboard' | 'spreadsheet' | 'history' | 'quick-fix'>('search');
   const [selectedAptId, setSelectedAptId] = useState<string | null>(null);
   const [aptToDelete, setAptToDelete] = useState<string | null>(null);
@@ -118,12 +119,17 @@ export default function App() {
 
   // Initial load
   useEffect(() => {
-    const { apartments: loadedApts } = loadStoredApartments();
-    setApartments(loadedApts);
+    async function init() {
+      setIsLoading(true);
+      const { apartments: loadedApts } = await loadStoredApartments();
+      setApartments(loadedApts);
+      setIsLoading(false);
+    }
+    init();
   }, []);
 
   // Sync state changes to storage
-  const updateApartmentInState = (updatedApt: ApartmentInspection) => {
+  const updateApartmentInState = async (updatedApt: ApartmentInspection) => {
     setHistoricalViewApt(null);
     setApartments(prev => {
       const next = prev.map(a => a.apartmentId === updatedApt.apartmentId ? updatedApt : a);
@@ -462,6 +468,14 @@ export default function App() {
     if (!selectedAptId) return null;
     return apartments.find(a => a.apartmentId === selectedAptId) || null;
   }, [apartments, selectedAptId, historicalViewApt]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-purple-900 font-bold bg-purple-50">
+        Carregando seus dados...
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-purple-50/40 text-gray-900 flex flex-col font-sans selection:bg-purple-800 selection:text-white">
