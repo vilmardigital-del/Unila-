@@ -17,6 +17,11 @@ function getFirebase() {
       appId: process.env.FIREBASE_APP_ID,
     };
 
+    console.log('Firebase Env Check:', {
+      hasApiKey: !!process.env.FIREBASE_API_KEY,
+      hasProjectId: !!process.env.FIREBASE_PROJECT_ID
+    });
+
     if (!firebaseConfig.apiKey) {
       console.warn('Firebase API key is missing. Firebase features will be disabled.');
       return { db: null as unknown as Firestore, auth: null as unknown as Auth };
