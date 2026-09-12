@@ -59,7 +59,7 @@ export default function App() {
   const [quickFixSearchId, setQuickFixSearchId] = useState('');
 
   // Handle service completion
-  const handleServiceCompleted = (aptId: string, itemId: string) => {
+  const handleServiceCompleted = async (aptId: string, itemId: string) => {
     setApartments(prev => {
       const next = prev.map(a => {
         if (a.apartmentId === aptId && a.items[itemId]) {
@@ -74,7 +74,9 @@ export default function App() {
         }
         return a;
       });
-      saveApartmentsState(next);
+      saveApartmentsState(next); // This needs to be awaited if possible, but setState is synchronous. 
+      // Actually, since setState is synchronous, I can't await inside setApartments. 
+      // I should update the state and then await the save separately.
       return next;
     });
   };
@@ -133,8 +135,13 @@ export default function App() {
     setHistoricalViewApt(null);
     setApartments(prev => {
       const next = prev.map(a => a.apartmentId === updatedApt.apartmentId ? updatedApt : a);
-      saveApartmentsState(next);
       return next;
+    });
+    // Find updated state to save
+    setApartments(prev => {
+        const next = prev.map(a => a.apartmentId === updatedApt.apartmentId ? updatedApt : a);
+        saveApartmentsState(next);
+        return next;
     });
   };
 

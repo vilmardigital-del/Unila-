@@ -1,7 +1,7 @@
 import { ApartmentInspection } from '../types';
 import { generateAllApartments, createEmptyItemsMap } from '../data/apartments';
 import { loadFinalizedInspections } from './historyStorage';
-import { db, auth } from '../lib/firebase';
+import { getDb, getAuthInstance } from '../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 
@@ -15,31 +15,36 @@ export interface AppSettings {
 
 export async function loadStoredApartments(): Promise<{ apartments: ApartmentInspection[]; settings: AppSettings }> {
   try {
-    // Ensure user is authenticated
-    if (!auth.currentUser) {
-      await signInAnonymously(auth);
-    }
-    const userId = auth.currentUser?.uid;
-    if (!userId) throw new Error('User not authenticated');
-
+    const auth = getAuthInstance();
     const baseApartments = generateAllApartments();
     
-    // Attempt to load from Firestore
-    const docRef = doc(db, 'users', userId, 'data', 'vistorias');
-    const docSnap = await getDoc(docRef);
-
     let savedMap: Record<string, Partial<ApartmentInspection>> = {};
     let settings: AppSettings = {
       allGenerated: false,
       defaultInspector: ''
     };
 
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      savedMap = data.apartments || {};
-      settings = data.settings || settings;
-    } else {
-      // Fallback to localStorage if no Firestore data yet (migration)
+    // Ensure user is authenticated
+    if (auth && !auth.currentUser) {
+      await signInAnonymously(auth);
+    }
+    const userId = auth?.currentUser?.uid;
+
+    if (userId) {
+      const db = getDb();
+      if (db) {
+        const docRef = doc(db, 'users', userId, 'data', 'vistorias');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          savedMap = data.apartments || {};
+          settings = data.settings || settings;
+        }
+      }
+    }
+    
+    // If no data found in Firestore (or not authenticated), fallback to localStorage
+    if (Object.keys(savedMap).length === 0) {
       const rawData = localStorage.getItem(STORAGE_KEY);
       const rawSettings = localStorage.getItem(SETTINGS_KEY);
       if (rawData) savedMap = JSON.parse(rawData);
@@ -86,7 +91,7 @@ export async function loadStoredApartments(): Promise<{ apartments: ApartmentIns
 
     return { apartments: mergedApartments, settings };
   } catch (err) {
-    console.error('Erro ao carregar dados do Firestore:', err);
+    console.error('Erro ao carregar dados:', err);
     return {
       apartments: generateAllApartments(),
       settings: { allGenerated: false, defaultInspector: '' }
@@ -96,14 +101,28 @@ export async function loadStoredApartments(): Promise<{ apartments: ApartmentIns
 
 export async function saveApartmentsState(apartments: ApartmentInspection[], settings?: AppSettings): Promise<void> {
   try {
-    const userId = auth.currentUser?.uid;
-    if (!userId) return;
+    const auth = getAuthInstance();
+    let userId = auth?.currentUser?.uid;
+    if (auth && !userId) {
+      await signInAnonymously(auth);
+      userId = auth.currentUser?.uid;
+    }
+    
+    if (!userId) {
+      console.error('Cannot save: User not authenticated');
+      return;
+    }
 
     const dataToSave: Record<string, ApartmentInspection> = {};
     apartments.forEach(apt => {
       dataToSave[apt.apartmentId] = apt;
     });
 
+    const db = getDb();
+    if (!db) {
+      console.error('Cannot save: Firebase Database not initialized');
+      return;
+    }
     await setDoc(doc(db, 'users', userId, 'data', 'vistorias'), {
       apartments: dataToSave,
       settings: settings || {}

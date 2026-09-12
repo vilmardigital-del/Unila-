@@ -19,7 +19,7 @@ function getFirebase() {
 
     if (!firebaseConfig.apiKey) {
       console.warn('Firebase API key is missing. Firebase features will be disabled.');
-      return null;
+      return { db: null as unknown as Firestore, auth: null as unknown as Auth };
     }
 
     app = initializeApp(firebaseConfig);
@@ -29,18 +29,5 @@ function getFirebase() {
   return { db: _db, auth: _auth };
 }
 
-export const db = new Proxy({} as Firestore, {
-  get: (_, prop) => {
-    const fb = getFirebase();
-    if (!fb) throw new Error('Firebase not initialized');
-    return (fb.db as any)[prop];
-  }
-});
-
-export const auth = new Proxy({} as Auth, {
-  get: (_, prop) => {
-    const fb = getFirebase();
-    if (!fb) throw new Error('Firebase not initialized');
-    return (fb.auth as any)[prop];
-  }
-});
+export const getDb = () => getFirebase().db;
+export const getAuthInstance = () => getFirebase().auth;
