@@ -1,0 +1,69 @@
+{
+  "entities": {
+    "ApartmentInspection": {
+      "title": "ApartmentInspection",
+      "description": "Estado da vistoria de um apartamento",
+      "type": "object",
+      "properties": {
+        "apartmentId": { "type": "string" },
+        "block": { "type": "string" },
+        "number": { "type": "string" },
+        "floor": { "type": "string" },
+        "isGenerated": { "type": "boolean" },
+        "status": { "type": "string" },
+        "inspectorName": { "type": "string" },
+        "occupancyStatus": { "type": "string" },
+        "keyCount": { "type": "string" },
+        "items": { "type": "object" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["apartmentId", "block", "number", "floor", "isGenerated", "status"]
+    },
+    "FinalizedInspection": {
+      "title": "FinalizedInspection",
+      "description": "Registro de vistoria finalizada e arquivada",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "apartmentId": { "type": "string" },
+        "block": { "type": "string" },
+        "number": { "type": "string" },
+        "floor": { "type": "string" },
+        "inspectorName": { "type": "string" },
+        "occupancyStatus": { "type": "string" },
+        "keyCount": { "type": "string" },
+        "finalizedAt": { "type": "string" },
+        "inspectionDate": { "type": "string" },
+        "inspectionTime": { "type": "string" },
+        "items": { "type": "object" },
+        "simCount": { "type": "number" },
+        "naoCount": { "type": "number" },
+        "pendingCount": { "type": "number" }
+      },
+      "required": ["id", "apartmentId", "finalizedAt", "inspectionDate"]
+    },
+    "AppSettings": {
+      "title": "AppSettings",
+      "description": "Configurações gerais do sistema de vistorias",
+      "type": "object",
+      "properties": {
+        "allGenerated": { "type": "boolean" },
+        "defaultInspector": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "/vistorias_sistema/{docId}": {
+      "schema": "ApartmentInspection",
+      "description": "Estado ativo dos apartamentos e vistorias em andamento"
+    },
+    "/historico_vistorias/{docId}": {
+      "schema": "FinalizedInspection",
+      "description": "Histórico de todas as vistorias concluídas e arquivadas"
+    },
+    "/configuracoes/{docId}": {
+      "schema": "AppSettings",
+      "description": "Configurações gerais do sistema"
+    }
+  }
+}

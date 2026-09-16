@@ -1,0 +1,22 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Permite leitura e escrita para as vistorias, histórico e configurações do sistema UNILA
+    match /vistorias_sistema/{docId} {
+      allow read, write: if true;
+    }
+    match /historico_vistorias/{docId} {
+      allow read, write: if true;
+    }
+    match /configuracoes/{docId} {
+      allow read, write: if true;
+    }
+    // Fallback legado para dados de usuários anteriores
+    match /users/{userId}/{document=**} {
+      allow read, write: if true;
+    }
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

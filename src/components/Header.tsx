@@ -1,5 +1,5 @@
 import React from 'react';
-import { ClipboardList, Building2, CheckCircle2, AlertTriangle, FileSpreadsheet, History, ArrowLeft } from 'lucide-react';
+import { ClipboardList, Building2, CheckCircle2, AlertTriangle, FileSpreadsheet, History, ArrowLeft, RotateCcw, Cloud } from 'lucide-react';
 
 interface HeaderProps {
   totalApartments: number;
@@ -8,6 +8,7 @@ interface HeaderProps {
   activeView: 'search' | 'dashboard' | 'spreadsheet' | 'history' | 'quick-fix';
   setActiveView: (view: 'search' | 'dashboard' | 'spreadsheet' | 'history' | 'quick-fix') => void;
   selectedAptId?: string | null;
+  onOpenResetModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -16,6 +17,7 @@ export const Header: React.FC<HeaderProps> = ({
   simCountTotal,
   activeView,
   setActiveView,
+  onOpenResetModal,
 }) => {
   return (
     <header className="sticky top-0 z-50 bg-gradient-to-r from-purple-900 via-purple-800 to-indigo-900 text-white shadow-md border-b-2 border-purple-500 print:hidden">
@@ -35,6 +37,11 @@ export const Header: React.FC<HeaderProps> = ({
                   </h1>
                   <span className="bg-purple-700/90 text-purple-100 text-[10px] font-semibold px-2 py-0.2 rounded-full border border-purple-400">
                     Manutenção
+                  </span>
+                  <span className="hidden sm:inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-300 text-[10px] font-bold px-2 py-0.2 rounded-full border border-emerald-400/30" title="Sincronização em tempo real ativa entre todos os dispositivos">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <Cloud className="w-2.5 h-2.5" />
+                    <span>Nuvem Compartilhada</span>
                   </span>
                 </div>
                 <p className="text-[11px] text-purple-200 leading-tight">
@@ -125,6 +132,17 @@ export const Header: React.FC<HeaderProps> = ({
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   <span>Relatório Geral</span>
                 </button>
+
+                {onOpenResetModal && (
+                  <button
+                    onClick={onOpenResetModal}
+                    title="Zerar banco de dados e reiniciar o sistema do zero"
+                    className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-red-950/80 hover:bg-red-850 text-red-200 border border-red-700/60 transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5 text-red-300" />
+                    <span>Zerar Sistema</span>
+                  </button>
+                )}
             </div>
 
           </div>

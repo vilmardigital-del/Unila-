@@ -25,7 +25,7 @@ import {
   X
 } from 'lucide-react';
 import { FinalizedInspection, BuildingBlock, InspectionItemState } from '../types';
-import { loadFinalizedInspections, deleteFinalizedInspection } from '../utils/historyStorage';
+import { loadFinalizedInspections, deleteFinalizedInspection, loadFinalizedInspectionsAsync, subscribeToHistory } from '../utils/historyStorage';
 import { exportApartmentToPDF } from '../utils/pdfExport';
 
 interface InspectionHistoryProps {
@@ -52,6 +52,13 @@ export const InspectionHistory: React.FC<InspectionHistoryProps> = ({
 
   useEffect(() => {
     setHistoryList(loadFinalizedInspections());
+    loadFinalizedInspectionsAsync().then(records => {
+      setHistoryList(records);
+    });
+    const unsubscribe = subscribeToHistory((records) => {
+      setHistoryList(records);
+    });
+    return () => unsubscribe();
   }, []);
 
   const handleDeleteClick = (id: string, aptId: string, dateStr: string) => {

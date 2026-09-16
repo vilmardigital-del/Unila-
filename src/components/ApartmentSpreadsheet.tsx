@@ -165,13 +165,16 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
       updatedItems[itemKey].status = 'sim';
     }
 
-    setLocalApartment({
+    const updatedApt = {
       ...localApartment,
       updatedAt: nowStr,
       items: updatedItems
-    });
+    };
 
-    setToastMessage('Alterações Pendentes (Salvar Manualmente)');
+    setLocalApartment(updatedApt);
+    onUpdateApartment(updatedApt);
+
+    setToastMessage('Alteração Salva e Sincronizada');
     triggerSavedToast();
   };
 
@@ -191,42 +194,51 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
       };
     });
 
-    setLocalApartment({
+    const updatedApt = {
       ...localApartment,
       isGenerated: true,
       updatedAt: new Date().toISOString(),
       items: updatedItems
-    });
+    };
+
+    setLocalApartment(updatedApt);
+    onUpdateApartment(updatedApt);
     triggerSavedToast();
   };
 
   const handleInspectorChange = (name: string) => {
     if (isLocked) return;
-    setLocalApartment({
+    const updatedApt = {
       ...localApartment,
       inspectorName: name,
       updatedAt: new Date().toISOString()
-    });
+    };
+    setLocalApartment(updatedApt);
+    onUpdateApartment(updatedApt);
     triggerSavedToast();
   };
 
   const handleKeyCountChange = (count: '1 chave' | '2 chave' | '3 chave' | '4 chave' | '5 chave') => {
     if (isLocked) return;
-    setLocalApartment({
+    const updatedApt = {
       ...localApartment,
       keyCount: count,
       updatedAt: new Date().toISOString()
-    });
+    };
+    setLocalApartment(updatedApt);
+    onUpdateApartment(updatedApt);
     triggerSavedToast();
   };
 
   const handleOccupancyChange = (status: 'ocupado' | 'desocupado') => {
     if (isLocked) return;
-    setLocalApartment({
+    const updatedApt = {
       ...localApartment,
       occupancyStatus: status,
       updatedAt: new Date().toISOString()
-    });
+    };
+    setLocalApartment(updatedApt);
+    onUpdateApartment(updatedApt);
     triggerSavedToast();
   };
 

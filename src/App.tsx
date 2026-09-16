@@ -8,10 +8,10 @@ import { InspectionHistory } from './components/InspectionHistory';
 import { QuickFixView } from './components/QuickFixView';
 import { SearchAndGenerator } from './components/SearchAndGenerator';
 import { ApartmentInspection, BuildingBlock, InspectionItemState, FinalizedInspection } from './types';
-import { loadStoredApartments, saveApartmentsState } from './utils/storage';
+import { loadStoredApartments, saveApartmentsState, resetAllData, subscribeToApartmentsState } from './utils/storage';
 import { saveFinalizedInspection } from './utils/historyStorage';
-import { createEmptyItemsMap } from './data/apartments';
-import { Sparkles, Building2, Search, PlusCircle, CheckCircle2, Trash2, User, Home, Key, AlertTriangle, ArrowRight, X, Wrench } from 'lucide-react';
+import { createEmptyItemsMap, generateAllApartments } from './data/apartments';
+import { Sparkles, Building2, Search, PlusCircle, CheckCircle2, Trash2, User, Home, Key, AlertTriangle, ArrowRight, X, Wrench, RotateCcw } from 'lucide-react';
 
 export default function App() {
   const [apartments, setApartments] = useState<ApartmentInspection[]>([]);
@@ -19,6 +19,13 @@ export default function App() {
   const [activeView, setActiveView] = useState<'search' | 'dashboard' | 'spreadsheet' | 'history' | 'quick-fix'>('search');
   const [selectedAptId, setSelectedAptId] = useState<string | null>(null);
   const [aptToDelete, setAptToDelete] = useState<string | null>(null);
+
+  // System Reset Modal State
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetPassword, setResetPassword] = useState('');
+  const [resetError, setResetError] = useState('');
+  const [isResetting, setIsResetting] = useState(false);
+  const [resetSuccessMessage, setResetSuccessMessage] = useState('');
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -128,20 +135,49 @@ export default function App() {
       setIsLoading(false);
     }
     init();
+
+    // Subscribe to real-time changes across all devices
+    const unsubscribe = subscribeToApartmentsState(({ apartments: remoteApts }) => {
+      setApartments(remoteApts);
+    });
+
+    return () => unsubscribe();
   }, []);
+
+  // System Reset Handler - Wipes cloud database and local storage to start from scratch
+  const handleConfirmReset = async () => {
+    if (resetPassword !== '4526') {
+      setResetError('Senha de segurança incorreta.');
+      return;
+    }
+    setIsResetting(true);
+    setResetError('');
+    try {
+      await resetAllData();
+      const freshApts = generateAllApartments();
+      setApartments(freshApts);
+      setSelectedAptId(null);
+      setHistoricalViewApt(null);
+      setActiveView('search');
+      setSearchTerm('');
+      setShowResetModal(false);
+      setResetPassword('');
+      setResetSuccessMessage('Sistema e banco de dados zerados com sucesso! Começando do zero.');
+      setTimeout(() => setResetSuccessMessage(''), 5000);
+    } catch (err) {
+      setResetError('Erro ao zerar o banco de dados. Tente novamente.');
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   // Sync state changes to storage
   const updateApartmentInState = async (updatedApt: ApartmentInspection) => {
     setHistoricalViewApt(null);
     setApartments(prev => {
       const next = prev.map(a => a.apartmentId === updatedApt.apartmentId ? updatedApt : a);
+      saveApartmentsState(next);
       return next;
-    });
-    // Find updated state to save
-    setApartments(prev => {
-        const next = prev.map(a => a.apartmentId === updatedApt.apartmentId ? updatedApt : a);
-        saveApartmentsState(next);
-        return next;
     });
   };
 
@@ -498,7 +534,30 @@ export default function App() {
           setActiveView(view);
         }}
         selectedAptId={selectedAptId}
+        onOpenResetModal={() => {
+          setShowResetModal(true);
+          setResetPassword('');
+          setResetError('');
+        }}
       />
+
+      {/* Reset Success Toast */}
+      {resetSuccessMessage && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-3 w-full">
+          <div className="bg-emerald-600 text-white px-4 py-3 rounded-xl shadow-md flex items-center justify-between text-sm font-bold animate-fadeIn">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5" />
+              <span>{resetSuccessMessage}</span>
+            </div>
+            <button
+              onClick={() => setResetSuccessMessage('')}
+              className="p-1 hover:bg-emerald-700 rounded-lg text-emerald-100 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Body */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -924,6 +983,111 @@ export default function App() {
         </div>
       )}
 
+      {/* SYSTEM RESET CONFIRMATION MODAL */}
+      {showResetModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-red-200">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2 text-red-600">
+                <RotateCcw className="w-5 h-5 text-red-600" />
+                <h3 className="font-bold text-base text-red-950">Zerar Sistema e Banco de Dados</h3>
+              </div>
+              <button
+                onClick={() => {
+                  if (!isResetting) {
+                    setShowResetModal(false);
+                    setResetPassword('');
+                    setResetError('');
+                  }
+                }}
+                disabled={isResetting}
+                className="p-1 text-gray-400 hover:text-gray-700 rounded-lg cursor-pointer disabled:opacity-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="py-4 space-y-4">
+              <div className="bg-red-50 border border-red-200 rounded-xl p-3.5 text-xs text-red-900 flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-bold">Atenção: Esta ação é definitiva e irreversível!</p>
+                  <p>
+                    Todas as vistorias geradas, itens marcados para reparo e histórico de vistorias serão 
+                    <strong> permanentemente apagados</strong> do banco de dados na nuvem e deste dispositivo.
+                  </p>
+                  <p className="text-red-750 font-medium">
+                    O sistema será reiniciado limpo, começando do zero para todos os dispositivos conectados.
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-700 mb-1.5">
+                  Digite a senha de administrador (4526) para confirmar:
+                </label>
+                <input
+                  type="password"
+                  value={resetPassword}
+                  onChange={(e) => {
+                    setResetPassword(e.target.value);
+                    if (resetError) setResetError('');
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !isResetting) {
+                      e.preventDefault();
+                      handleConfirmReset();
+                    }
+                  }}
+                  placeholder="Senha de segurança"
+                  autoFocus
+                  disabled={isResetting}
+                  className="w-full px-3.5 py-2.5 border border-gray-300 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-red-600 focus:border-red-600"
+                />
+                {resetError && (
+                  <p className="mt-1.5 text-xs font-bold text-red-600 flex items-center gap-1">
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    <span>{resetError}</span>
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowResetModal(false);
+                  setResetPassword('');
+                  setResetError('');
+                }}
+                disabled={isResetting}
+                className="flex-1 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold rounded-xl text-xs sm:text-sm transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReset}
+                disabled={isResetting || !resetPassword}
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl text-xs sm:text-sm transition-colors shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isResetting ? (
+                  <>
+                    <RotateCcw className="w-4 h-4 animate-spin" />
+                    <span>Zerando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Confirmar e Zerar</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
