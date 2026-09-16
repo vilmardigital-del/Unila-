@@ -69,7 +69,7 @@ export async function loadStoredApartments(): Promise<{ apartments: ApartmentIns
       const saved = savedMap[baseApt.apartmentId];
       if (!saved) return baseApt;
 
-      if (saved.status === 'finalizada' && !finalizedIds.has(baseApt.apartmentId)) {
+      if (saved.status === 'finalizada' && finalizedIds.size > 0 && !finalizedIds.has(baseApt.apartmentId)) {
         return baseApt;
       }
 
@@ -130,7 +130,9 @@ export function subscribeToApartmentsState(
           const saved = savedMap[baseApt.apartmentId];
           if (!saved) return baseApt;
 
-          if (saved.status === 'finalizada' && !finalizedIds.has(baseApt.apartmentId)) {
+          // If marked finalized in the current state document, check against history cache
+          // If the status is finalized, ensure it is treated consistently
+          if (saved.status === 'finalizada' && finalizedIds.size > 0 && !finalizedIds.has(baseApt.apartmentId)) {
             return baseApt;
           }
 
