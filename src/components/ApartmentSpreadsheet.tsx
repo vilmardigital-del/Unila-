@@ -92,33 +92,29 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
     setExpandedRows(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
   };
 
-  // Save spreadsheet and permanently lock from direct open modification if 100% complete
+  // Save spreadsheet to cloud and lock if 100% complete
   const handleSaveSpreadsheet = () => {
-    // Check if all items are answered
-    if (pendingCount > 0) {
-      setToastMessage(`Atenção: A planilha só pode ser salva quando TODOS os itens forem respondidos. Restam ${pendingCount} item(ns) pendente(s).`);
-      setShowSavedToast(true);
-      setTimeout(() => setShowSavedToast(false), 3000);
-      return;
-    }
-
-    const is100PercentComplete = true; // Since pendingCount === 0
+    const is100PercentComplete = pendingCount === 0;
     
     const updatedApt: ApartmentInspection = {
       ...localApartment,
       isGenerated: true,
-      isSaved: true,
-      isLocked: true, // Lock automatically if 100% complete
+      isSaved: is100PercentComplete,
+      isLocked: is100PercentComplete,
       updatedAt: new Date().toISOString()
     };
     
     setLocalApartment(updatedApt);
     onUpdateApartment(updatedApt);
     
-    setToastMessage('Planilha Salva com Sucesso! 100% concluído, planilha bloqueada.');
+    if (is100PercentComplete) {
+      setToastMessage('Planilha 100% Concluída e Sincronizada na Nuvem!');
+    } else {
+      setToastMessage(`Progresso Salvo e Sincronizado na Nuvem! (Restam ${pendingCount} itens a avaliar)`);
+    }
     
     setShowSavedToast(true);
-    setTimeout(() => setShowSavedToast(false), 3000);
+    setTimeout(() => setShowSavedToast(false), 3500);
   };
 
   // Calculate totals
@@ -165,8 +161,9 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
       updatedItems[itemKey].status = 'sim';
     }
 
-    const updatedApt = {
+    const updatedApt: ApartmentInspection = {
       ...localApartment,
+      isGenerated: true,
       updatedAt: nowStr,
       items: updatedItems
     };

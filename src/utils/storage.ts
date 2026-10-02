@@ -36,6 +36,12 @@ export function cleanFirestoreData<T>(obj: T): T {
  */
 export async function saveSingleApartmentState(apartment: ApartmentInspection): Promise<void> {
   try {
+    const cleanApt: ApartmentInspection = {
+      ...apartment,
+      isGenerated: true,
+      updatedAt: apartment.updatedAt || new Date().toISOString()
+    };
+
     // 1. Update local storage cache
     const rawData = localStorage.getItem(STORAGE_KEY);
     let cacheMap: Record<string, Partial<ApartmentInspection>> = {};
@@ -46,21 +52,18 @@ export async function saveSingleApartmentState(apartment: ApartmentInspection): 
         cacheMap = {};
       }
     }
-    cacheMap[apartment.apartmentId] = apartment;
+    cacheMap[cleanApt.apartmentId] = cleanApt;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(cacheMap));
 
     // 2. Save directly to cloud Firestore
     const db = getDb();
     if (db) {
-      const docRef = doc(db, 'vistorias_sistema', apartment.apartmentId);
-      const payload = cleanFirestoreData({
-        ...apartment,
-        updatedAt: apartment.updatedAt || new Date().toISOString()
-      });
+      const docRef = doc(db, 'vistorias_sistema', cleanApt.apartmentId);
+      const payload = cleanFirestoreData(cleanApt);
       await setDoc(docRef, payload, { merge: true });
-      console.log(`[Nuvem] Apartamento ${apartment.apartmentId} sincronizado com Firestore!`);
+      console.log(`[Nuvem] Apartamento ${cleanApt.apartmentId} sincronizado com Firestore!`);
     } else {
-      console.warn('[Nuvem] Instância Firestore indisponível para', apartment.apartmentId);
+      console.warn('[Nuvem] Instância Firestore indisponível para', cleanApt.apartmentId);
     }
   } catch (err) {
     console.error(`Erro ao salvar apartamento ${apartment.apartmentId} no Firestore:`, err);
@@ -132,6 +135,7 @@ export async function saveMultipleApartmentsState(
         const docRef = doc(db, 'vistorias_sistema', apt.apartmentId);
         const payload = cleanFirestoreData({
           ...apt,
+          isGenerated: true,
           updatedAt: apt.updatedAt || new Date().toISOString()
         });
         batch.set(docRef, payload, { merge: true });
@@ -232,10 +236,21 @@ function mergeApartmentsWithBase(
       });
     }
 
+    // An apartment is generated if isGenerated is true, or if it has been finalized,
+    // or has inspector name, occupancy status, key count, or any evaluated items/observations
+    const hasModifications = Boolean(
+      saved.isGenerated ||
+      saved.status === 'finalizada' ||
+      (saved.inspectorName && saved.inspectorName.trim() !== '') ||
+      saved.occupancyStatus ||
+      saved.keyCount ||
+      (saved.items && Object.values(saved.items).some(it => it.status !== null || (it.observation && it.observation.trim() !== '')))
+    );
+
     return {
       ...baseApt,
       ...saved,
-      isGenerated: Boolean(saved.isGenerated),
+      isGenerated: hasModifications,
       status: saved.status || 'rascunho',
       items: baseItems
     };
@@ -293,7 +308,7 @@ export async function loadStoredApartments(): Promise<{ apartments: ApartmentIns
       }
     }
 
-    // 2. If no data found in Firestore, fallback to local storage
+    // 2. If no data found in Firestore, fallback to local storage and sync up to Firestore
     if (Object.keys(savedMap).length === 0) {
       const rawData = localStorage.getItem(STORAGE_KEY);
       const rawSettings = localStorage.getItem(SETTINGS_KEY);
@@ -310,6 +325,24 @@ export async function loadStoredApartments(): Promise<{ apartments: ApartmentIns
         } catch {
           // ignore
         }
+      }
+
+      // If local cache had active/generated apartments that never reached Firestore, sync them up now!
+      const generatedToUpload = Object.values(savedMap).filter(a => a && (a.isGenerated || a.inspectorName || a.status === 'finalizada'));
+      if (generatedToUpload.length > 0 && db) {
+        console.log(`[Sincronização] Enviando ${generatedToUpload.length} apartamento(s) do cache local para a nuvem Firestore...`);
+        const batch = writeBatch(db);
+        generatedToUpload.forEach(apt => {
+          if (apt.apartmentId) {
+            const docRef = doc(db, 'vistorias_sistema', apt.apartmentId);
+            batch.set(docRef, cleanFirestoreData({
+              ...apt,
+              isGenerated: true,
+              updatedAt: apt.updatedAt || new Date().toISOString()
+            }), { merge: true });
+          }
+        });
+        batch.commit().catch(e => console.warn('Erro ao subir cache local para Firestore:', e));
       }
     }
 

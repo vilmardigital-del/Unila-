@@ -355,34 +355,34 @@ export default function App() {
         return;
       }
 
+      const filteredIds = new Set(filteredApartments.map(fa => fa.apartmentId));
       let firstAptIdToOpen: string | null = null;
       const updatedList: ApartmentInspection[] = [];
 
-      setApartments(prev => {
-        const next = prev.map(a => {
-          if (filteredApartments.some(fa => fa.apartmentId === a.apartmentId)) {
-            if (!firstAptIdToOpen) firstAptIdToOpen = a.apartmentId;
-            const shouldReset = a.status === 'finalizada' || !a.items || a.isSaved;
-            const updated: ApartmentInspection = {
-              ...a,
-              isGenerated: true,
-              isSaved: false,
-              isLocked: false,
-              status: 'rascunho' as const,
-              finalizedAt: undefined,
-              inspectorName: finalInspector,
-              occupancyStatus: finalStatus,
-              keyCount: finalKeys,
-              items: shouldReset ? createEmptyItemsMap() : a.items,
-              updatedAt: nowIso
-            };
-            updatedList.push(updated);
-            return updated;
-          }
-          return a;
-        });
-        return next;
+      const nextApartments = apartments.map(a => {
+        if (filteredIds.has(a.apartmentId)) {
+          if (!firstAptIdToOpen) firstAptIdToOpen = a.apartmentId;
+          const shouldReset = a.status === 'finalizada' || !a.items || a.isSaved;
+          const updated: ApartmentInspection = {
+            ...a,
+            isGenerated: true,
+            isSaved: false,
+            isLocked: false,
+            status: 'rascunho' as const,
+            finalizedAt: undefined,
+            inspectorName: finalInspector,
+            occupancyStatus: finalStatus,
+            keyCount: finalKeys,
+            items: shouldReset ? createEmptyItemsMap() : a.items,
+            updatedAt: nowIso
+          };
+          updatedList.push(updated);
+          return updated;
+        }
+        return a;
       });
+
+      setApartments(nextApartments);
 
       if (updatedList.length > 0) {
         await saveMultipleApartmentsState(updatedList, { allGenerated: false, defaultInspector: finalInspector });
@@ -401,36 +401,29 @@ export default function App() {
         return;
       }
 
-      let newlyGeneratedApt: ApartmentInspection | null = null;
+      const shouldReset = !existing || existing.status === 'finalizada' || !existing.items || existing.isSaved;
+      const updatedApt: ApartmentInspection = {
+        ...(existing || {
+          apartmentId: targetId,
+          block: targetId.charAt(0) as any,
+          number: targetId.slice(1),
+          floor: targetId.charAt(1) === '0' ? 'Térreo' : targetId.charAt(1) === '1' ? '1º Andar' : '2º Andar',
+          items: createEmptyItemsMap()
+        }),
+        isGenerated: true,
+        isSaved: false,
+        isLocked: false,
+        status: 'rascunho' as const,
+        finalizedAt: undefined,
+        inspectorName: finalInspector,
+        occupancyStatus: finalStatus,
+        keyCount: finalKeys,
+        items: shouldReset ? createEmptyItemsMap() : existing.items,
+        updatedAt: nowIso
+      };
 
-      setApartments(prev => {
-        const next = prev.map(a => {
-          if (a.apartmentId === targetId) {
-            const shouldReset = a.status === 'finalizada' || !a.items || a.isSaved;
-            const updated: ApartmentInspection = {
-              ...a,
-              isGenerated: true,
-              isSaved: false,
-              isLocked: false,
-              status: 'rascunho' as const,
-              finalizedAt: undefined,
-              inspectorName: finalInspector,
-              occupancyStatus: finalStatus,
-              keyCount: finalKeys,
-              items: shouldReset ? createEmptyItemsMap() : a.items,
-              updatedAt: nowIso
-            };
-            newlyGeneratedApt = updated;
-            return updated;
-          }
-          return a;
-        });
-        return next;
-      });
-
-      if (newlyGeneratedApt) {
-        await saveSingleApartmentState(newlyGeneratedApt);
-      }
+      setApartments(prev => prev.map(a => a.apartmentId === targetId ? updatedApt : a));
+      await saveSingleApartmentState(updatedApt);
 
       setSelectedAptId(targetId);
       setActiveView('spreadsheet');
