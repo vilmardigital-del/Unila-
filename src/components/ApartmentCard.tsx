@@ -170,53 +170,90 @@ export const ApartmentCard: React.FC<ApartmentCardProps> = ({
         )}
       </div>
       {/* Action Buttons */}
-      <div className="mt-4 pt-3 border-t border-gray-100">
+      <div className="mt-4 pt-3 border-t border-gray-100 space-y-2">
         {isFinalized ? (
-          <div className="flex items-center gap-1.5 w-full flex-wrap sm:flex-nowrap">
-            {/* No actions for finalized inspection */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full">
+            <button
+              onClick={() => onSelect(apartment.apartmentId)}
+              className="flex-1 min-h-[44px] py-2.5 px-4 bg-purple-900 hover:bg-purple-800 text-white font-bold text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center gap-2 shadow-xs active:scale-95 cursor-pointer"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-purple-200" />
+              <span>Ver Planilha Finalizada</span>
+              <ArrowRight className="w-4 h-4 ml-auto text-purple-300" />
+            </button>
             <button
               onClick={() => onGenerate(apartment.apartmentId)}
-              className="flex-1 py-2 px-3 bg-purple-900 hover:bg-purple-800 text-white font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
+              className="min-h-[44px] py-2.5 px-4 bg-purple-100 hover:bg-purple-200 text-purple-950 font-bold text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center gap-1.5 border border-purple-300 active:scale-95 cursor-pointer"
               title="Gerar nova planilha"
             >
-              <PlusCircle className="w-3.5 h-3.5 text-amber-300" />
+              <PlusCircle className="w-4 h-4 text-purple-700" />
               <span>Gerar Nova</span>
             </button>
           </div>
         ) : apartment.isGenerated ? (
-          <div className="flex items-center gap-1.5 w-full">
-            {onOpenRepairs && countSim > 0 && (
+          <div className="space-y-2 w-full">
+            
+            {/* Primary Row: Abrir Planilha + Excluir */}
+            <div className="flex items-center gap-2 w-full">
+              <button
+                onClick={() => onSelect(apartment.apartmentId)}
+                className="flex-1 min-h-[44px] py-2.5 px-4 bg-purple-900 hover:bg-purple-800 active:bg-purple-950 text-white font-bold text-xs sm:text-sm rounded-xl transition-all flex items-center justify-between shadow-sm cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <FileSpreadsheet className="w-4 h-4 text-purple-300" />
+                  <span>Abrir Planilha</span>
+                </div>
+                <ArrowRight className="w-4 h-4 text-purple-300" />
+              </button>
+
+              {onDelete && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(apartment.apartmentId);
+                  }}
+                  className="w-11 h-11 shrink-0 flex items-center justify-center text-red-500 hover:text-red-700 hover:bg-red-50 active:bg-red-100 rounded-xl transition-colors border border-purple-200/80 cursor-pointer"
+                  title="Excluir / Resetar esta planilha"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+
+            {/* Secondary Action Row: Reparos or Finalizar */}
+            {countSim > 0 && onOpenRepairs && (
               <button
                 onClick={() => onOpenRepairs(apartment.apartmentId)}
-                className="py-2 px-2.5 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1 cursor-pointer border bg-amber-600 hover:bg-amber-700 text-white border-amber-600 shadow-xs"
+                className="w-full min-h-[42px] py-2 px-3 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer border bg-amber-600 hover:bg-amber-700 text-white border-amber-600 shadow-xs active:scale-95"
                 title="Ver e editar apenas os reparos e observações deste apartamento"
               >
-                <Wrench className="w-3.5 h-3.5" />
-                <span>Reparos</span>
+                <Wrench className="w-4 h-4 text-amber-100" />
+                <span>Confirmar Reparos ({countSim} pendente{countSim > 1 ? 's' : ''})</span>
               </button>
             )}
 
             {countSim === 0 && onFinalizeInspection && !showPassword && (
               <button
-                className="py-2 px-2.5 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1 cursor-pointer border bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 shadow-xs"
+                className="w-full min-h-[42px] py-2 px-3 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer border bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 shadow-xs active:scale-95"
                 onClick={() => setShowPassword(true)}
               >
-                <CheckCircle className="w-3.5 h-3.5" />
-                <span>Finalizar</span>
+                <CheckCircle className="w-4 h-4 text-emerald-100" />
+                <span>Finalizar Vistoria (Sem Reparos)</span>
               </button>
             )}
 
             {showPassword && (
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2 p-2 bg-emerald-50 border border-emerald-200 rounded-xl">
                 <input
                   type="password"
-                  className="w-16 p-1 border border-gray-300 rounded text-[10px]"
-                  placeholder="Senha"
+                  autoFocus
+                  className="flex-1 h-9 px-2.5 border border-emerald-300 rounded-lg text-xs bg-white focus:outline-none focus:ring-2 focus:ring-emerald-600"
+                  placeholder="Senha de segurança"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                 />
                 <button
-                  className="py-1 px-1.5 bg-emerald-600 text-white text-[10px] rounded hover:bg-emerald-700 transition-colors"
+                  className="h-9 px-3 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors cursor-pointer"
                   onClick={() => {
                     if (password === '4526') {
                       onFinalizeInspection?.(apartment.apartmentId);
@@ -229,54 +266,43 @@ export const ApartmentCard: React.FC<ApartmentCardProps> = ({
                     }
                   }}
                 >
-                  OK
+                  Confirmar
                 </button>
-                {passwordError && <span className="text-red-500 text-[10px]">!</span>}
+                <button
+                  className="h-9 px-2.5 text-gray-500 hover:text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-100 cursor-pointer"
+                  onClick={() => {
+                    setShowPassword(false);
+                    setPassword('');
+                    setPasswordError(false);
+                  }}
+                >
+                  Cancelar
+                </button>
+                {passwordError && <span className="text-red-600 text-xs font-bold">Incorreta!</span>}
               </div>
             )}
 
-            <button
-              onClick={() => onSelect(apartment.apartmentId)}
-              className="flex-1 py-2 px-3 bg-purple-900 hover:bg-purple-800 text-white font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
-            >
-              <FileSpreadsheet className="w-3.5 h-3.5 text-purple-200" />
-              <span>Planilha</span>
-              <ArrowRight className="w-3.5 h-3.5 ml-auto text-purple-300" />
-            </button>
-
-            {onDelete && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(apartment.apartmentId);
-                }}
-                className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xl transition-colors border border-purple-200 cursor-pointer"
-                title="Excluir / Resetar esta planilha"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
           </div>
         ) : (
-          <div className="flex items-center gap-1.5 w-full">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full">
+            <button
+              onClick={() => onGenerate(apartment.apartmentId)}
+              className="flex-1 min-h-[44px] py-2.5 px-4 bg-purple-900 hover:bg-purple-800 active:bg-purple-950 text-white font-bold text-xs sm:text-sm rounded-xl transition-all flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+            >
+              <PlusCircle className="w-4 h-4 text-amber-300" />
+              <span>Gerar Planilha de Vistoria</span>
+            </button>
+
             {onOpenRepairs && (
               <button
                 onClick={() => onOpenRepairs(apartment.apartmentId)}
-                className="py-2 px-3 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1 border border-amber-200 cursor-pointer"
+                className="min-h-[44px] py-2.5 px-3 bg-amber-50 hover:bg-amber-100 text-amber-900 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 border border-amber-200 cursor-pointer"
                 title="Adicionar ou ver reparos para este apartamento"
               >
-                <Wrench className="w-3.5 h-3.5" />
+                <Wrench className="w-4 h-4 text-amber-700" />
                 <span>Reparos</span>
               </button>
             )}
-
-            <button
-              onClick={() => onGenerate(apartment.apartmentId)}
-              className="flex-1 py-2 px-3 bg-purple-100 hover:bg-purple-200 text-purple-900 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1.5 border border-purple-300 cursor-pointer"
-            >
-              <PlusCircle className="w-3.5 h-3.5 text-purple-700" />
-              <span>Gerar Planilha</span>
-            </button>
           </div>
         )}
       </div>

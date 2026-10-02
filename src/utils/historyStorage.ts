@@ -1,6 +1,14 @@
 import { FinalizedInspection } from '../types';
 import { getDb } from '../lib/firebase';
-import { doc, getDoc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import {
+  doc,
+  getDocs,
+  setDoc,
+  deleteDoc,
+  onSnapshot,
+  collection,
+  writeBatch
+} from 'firebase/firestore';
 
 const HISTORY_STORAGE_KEY = 'unila_vistorias_finalizadas_v1';
 
@@ -20,13 +28,29 @@ export async function loadFinalizedInspectionsAsync(): Promise<FinalizedInspecti
   try {
     const db = getDb();
     if (db) {
-      const docRef = doc(db, 'historico_vistorias', 'lista');
-      const snap = await getDoc(docRef);
-      if (snap.exists()) {
-        const data = snap.data();
-        const records = (data?.records || []) as FinalizedInspection[];
-        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(records));
-        return records;
+      const colRef = collection(db, 'historico_vistorias');
+      const snap = await getDocs(colRef);
+      if (!snap.empty) {
+        const records: FinalizedInspection[] = [];
+        snap.docs.forEach(docSnap => {
+          const data = docSnap.data();
+          if (docSnap.id === 'lista' && Array.isArray(data?.records)) {
+            // Legacy support
+            records.push(...data.records);
+          } else if (docSnap.id !== 'lista') {
+            records.push(data as FinalizedInspection);
+          }
+        });
+
+        // Deduplicate and sort by finalizedAt descending
+        const uniqueMap = new Map<string, FinalizedInspection>();
+        records.forEach(r => uniqueMap.set(r.id, r));
+        const sorted = Array.from(uniqueMap.values()).sort((a, b) => {
+          return new Date(b.finalizedAt).getTime() - new Date(a.finalizedAt).getTime();
+        });
+
+        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(sorted));
+        return sorted;
       }
     }
   } catch (err) {
@@ -39,20 +63,31 @@ export function subscribeToHistory(onUpdate: (records: FinalizedInspection[]) =>
   try {
     const db = getDb();
     if (!db) return () => {};
-    const docRef = doc(db, 'historico_vistorias', 'lista');
-    const unsubscribe = onSnapshot(docRef, (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        const records = (data?.records || []) as FinalizedInspection[];
-        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(records));
-        onUpdate(records);
-      } else {
-        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify([]));
-        onUpdate([]);
-      }
+
+    const colRef = collection(db, 'historico_vistorias');
+    const unsubscribe = onSnapshot(colRef, (snap) => {
+      const records: FinalizedInspection[] = [];
+      snap.docs.forEach(docSnap => {
+        const data = docSnap.data();
+        if (docSnap.id === 'lista' && Array.isArray(data?.records)) {
+          records.push(...data.records);
+        } else if (docSnap.id !== 'lista') {
+          records.push(data as FinalizedInspection);
+        }
+      });
+
+      const uniqueMap = new Map<string, FinalizedInspection>();
+      records.forEach(r => uniqueMap.set(r.id, r));
+      const sorted = Array.from(uniqueMap.values()).sort((a, b) => {
+        return new Date(b.finalizedAt).getTime() - new Date(a.finalizedAt).getTime();
+      });
+
+      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(sorted));
+      onUpdate(sorted);
     }, (error) => {
       console.warn('Subscription error on history:', error);
     });
+
     return unsubscribe;
   } catch (err) {
     console.warn('Could not setup history subscription:', err);
@@ -75,14 +110,11 @@ export function saveFinalizedInspection(inspection: FinalizedInspection): Finali
 
     localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updatedList));
 
-    // Save to Firestore asynchronously
+    // Save to Firestore in its own document
     const db = getDb();
     if (db) {
-      const docRef = doc(db, 'historico_vistorias', 'lista');
-      setDoc(docRef, {
-        records: updatedList,
-        updatedAt: new Date().toISOString()
-      }).catch(err => {
+      const docRef = doc(db, 'historico_vistorias', inspection.id);
+      setDoc(docRef, inspection, { merge: true }).catch(err => {
         console.error('Erro ao sincronizar histórico com Firestore:', err);
       });
     }
@@ -103,11 +135,8 @@ export function deleteFinalizedInspection(id: string): FinalizedInspection[] {
     // Update in Firestore
     const db = getDb();
     if (db) {
-      const docRef = doc(db, 'historico_vistorias', 'lista');
-      setDoc(docRef, {
-        records: updatedList,
-        updatedAt: new Date().toISOString()
-      }).catch(err => {
+      const docRef = doc(db, 'historico_vistorias', id);
+      deleteDoc(docRef).catch(err => {
         console.error('Erro ao remover do Firestore:', err);
       });
     }
@@ -129,8 +158,12 @@ export async function clearAllHistory(): Promise<void> {
   try {
     const db = getDb();
     if (db) {
-      const docRef = doc(db, 'historico_vistorias', 'lista');
-      await deleteDoc(docRef);
+      const snap = await getDocs(collection(db, 'historico_vistorias'));
+      if (!snap.empty) {
+        const batch = writeBatch(db);
+        snap.docs.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
     }
   } catch (err) {
     console.error('Erro ao limpar histórico do Firestore:', err);

@@ -2,7 +2,16 @@ import { ApartmentInspection } from '../types';
 import { generateAllApartments, createEmptyItemsMap } from '../data/apartments';
 import { loadFinalizedInspections, clearAllHistory } from './historyStorage';
 import { getDb } from '../lib/firebase';
-import { doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, getDocs } from 'firebase/firestore';
+import {
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  deleteDoc,
+  onSnapshot,
+  collection,
+  writeBatch
+} from 'firebase/firestore';
 
 const STORAGE_KEY = 'unila_vistorias_v1';
 const SETTINGS_KEY = 'unila_settings_v1';
@@ -12,9 +21,221 @@ export interface AppSettings {
   defaultInspector: string;
 }
 
+/**
+ * Saves a single apartment inspection directly to Firestore in its own document.
+ * This guarantees instantaneous real-time sync across all devices without size limits.
+ */
+export async function saveSingleApartmentState(apartment: ApartmentInspection): Promise<void> {
+  try {
+    // 1. Update local storage cache
+    const rawData = localStorage.getItem(STORAGE_KEY);
+    let cacheMap: Record<string, Partial<ApartmentInspection>> = {};
+    if (rawData) {
+      try {
+        cacheMap = JSON.parse(rawData);
+      } catch {
+        cacheMap = {};
+      }
+    }
+    cacheMap[apartment.apartmentId] = apartment;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cacheMap));
+
+    // 2. Save directly to cloud Firestore
+    const db = getDb();
+    if (db) {
+      const docRef = doc(db, 'vistorias_sistema', apartment.apartmentId);
+      await setDoc(docRef, {
+        ...apartment,
+        updatedAt: apartment.updatedAt || new Date().toISOString()
+      }, { merge: true });
+    }
+  } catch (err) {
+    console.error(`Erro ao salvar apartamento ${apartment.apartmentId} no Firestore:`, err);
+  }
+}
+
+/**
+ * Removes or resets an apartment spreadsheet in Firestore and notifies all devices in real time.
+ */
+export async function deleteApartmentFromCloud(apartmentId: string): Promise<void> {
+  try {
+    // 1. Update local cache
+    const rawData = localStorage.getItem(STORAGE_KEY);
+    if (rawData) {
+      try {
+        const cacheMap = JSON.parse(rawData);
+        delete cacheMap[apartmentId];
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cacheMap));
+      } catch {
+        // ignore
+      }
+    }
+
+    // 2. Delete document from Firestore
+    const db = getDb();
+    if (db) {
+      const docRef = doc(db, 'vistorias_sistema', apartmentId);
+      await deleteDoc(docRef);
+    }
+  } catch (err) {
+    console.error(`Erro ao excluir apartamento ${apartmentId} do Firestore:`, err);
+  }
+}
+
+/**
+ * Saves multiple generated/active apartments in batch to Firestore.
+ */
+export async function saveMultipleApartmentsState(
+  apartments: ApartmentInspection[],
+  settings?: AppSettings
+): Promise<void> {
+  try {
+    // Local cache update
+    const rawData = localStorage.getItem(STORAGE_KEY);
+    let cacheMap: Record<string, Partial<ApartmentInspection>> = {};
+    if (rawData) {
+      try {
+        cacheMap = JSON.parse(rawData);
+      } catch {
+        cacheMap = {};
+      }
+    }
+    apartments.forEach(apt => {
+      cacheMap[apt.apartmentId] = apt;
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(cacheMap));
+
+    if (settings) {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    }
+
+    // Batch save to Firestore
+    const db = getDb();
+    if (db) {
+      const batch = writeBatch(db);
+
+      // Only save apartments that are generated or have custom progress
+      apartments.forEach(apt => {
+        const docRef = doc(db, 'vistorias_sistema', apt.apartmentId);
+        batch.set(docRef, {
+          ...apt,
+          updatedAt: apt.updatedAt || new Date().toISOString()
+        }, { merge: true });
+      });
+
+      if (settings) {
+        const settingsRef = doc(db, 'configuracoes', 'geral');
+        batch.set(settingsRef, {
+          ...settings,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+
+      await batch.commit();
+    }
+  } catch (err) {
+    console.error('Erro ao salvar lote de apartamentos no Firestore:', err);
+  }
+}
+
+/**
+ * Saves state of all apartments, efficiently filtering only generated/modified ones for cloud.
+ */
+export async function saveApartmentsState(
+  apartments: ApartmentInspection[],
+  settings?: AppSettings
+): Promise<void> {
+  try {
+    const dataToSave: Record<string, ApartmentInspection> = {};
+    const activeApartmentsToCloud: ApartmentInspection[] = [];
+
+    apartments.forEach(apt => {
+      dataToSave[apt.apartmentId] = apt;
+      // Only send apartments that have been generated to cloud
+      if (apt.isGenerated || apt.status === 'finalizada' || apt.inspectorName) {
+        activeApartmentsToCloud.push(apt);
+      }
+    });
+
+    // Save full map to localStorage immediately
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+    if (settings) {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    }
+
+    // Save active to Firestore
+    const db = getDb();
+    if (db && activeApartmentsToCloud.length > 0) {
+      // Split into batches of 400 (Firestore limit is 500 per batch)
+      const batchSize = 400;
+      for (let i = 0; i < activeApartmentsToCloud.length; i += batchSize) {
+        const chunk = activeApartmentsToCloud.slice(i, i + batchSize);
+        const batch = writeBatch(db);
+        chunk.forEach(apt => {
+          const docRef = doc(db, 'vistorias_sistema', apt.apartmentId);
+          batch.set(docRef, apt, { merge: true });
+        });
+        await batch.commit();
+      }
+
+      if (settings) {
+        await setDoc(doc(db, 'configuracoes', 'geral'), {
+          ...settings,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao salvar no Firestore:', err);
+  }
+}
+
+/**
+ * Merges raw saved records with baseline 144 apartments.
+ */
+function mergeApartmentsWithBase(
+  savedMap: Record<string, Partial<ApartmentInspection>>
+): ApartmentInspection[] {
+  const baseApartments = generateAllApartments();
+  const finalizedHistory = loadFinalizedInspections();
+  const finalizedIds = new Set(finalizedHistory.map(h => h.apartmentId));
+
+  return baseApartments.map(baseApt => {
+    const saved = savedMap[baseApt.apartmentId];
+    if (!saved) return baseApt;
+
+    if (saved.status === 'finalizada' && finalizedIds.size > 0 && !finalizedIds.has(baseApt.apartmentId)) {
+      return baseApt;
+    }
+
+    const baseItems = createEmptyItemsMap();
+    if (saved.items) {
+      Object.keys(baseItems).forEach(itemKey => {
+        if (saved.items && saved.items[itemKey]) {
+          baseItems[itemKey] = {
+            ...baseItems[itemKey],
+            ...saved.items[itemKey]
+          };
+        }
+      });
+    }
+
+    const isActuallyGenerated = saved.status === 'finalizada' ? false : (saved.isGenerated ?? false);
+
+    return {
+      ...baseApt,
+      ...saved,
+      isGenerated: isActuallyGenerated,
+      items: baseItems
+    };
+  });
+}
+
+/**
+ * Loads stored apartments from Firestore collection or fallback local storage.
+ */
 export async function loadStoredApartments(): Promise<{ apartments: ApartmentInspection[]; settings: AppSettings }> {
   try {
-    const baseApartments = generateAllApartments();
     let savedMap: Record<string, Partial<ApartmentInspection>> = {};
     let settings: AppSettings = {
       allGenerated: false,
@@ -25,12 +246,34 @@ export async function loadStoredApartments(): Promise<{ apartments: ApartmentIns
     const db = getDb();
     if (db) {
       try {
-        const docRef = doc(db, 'vistorias_sistema', 'estado_atual');
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          savedMap = data.apartments || {};
-          settings = data.settings || settings;
+        // Query the vistorias_sistema collection where each apt has its own doc
+        const colRef = collection(db, 'vistorias_sistema');
+        const querySnap = await getDocs(colRef);
+
+        if (!querySnap.empty) {
+          querySnap.docs.forEach(docSnap => {
+            const data = docSnap.data();
+            if (docSnap.id === 'estado_atual' && data.apartments) {
+              // Legacy support
+              Object.assign(savedMap, data.apartments);
+            } else if (docSnap.id !== 'estado_atual') {
+              const aptId = (data.apartmentId || docSnap.id).toUpperCase();
+              savedMap[aptId] = data as Partial<ApartmentInspection>;
+            }
+          });
+        }
+
+        // Load settings
+        try {
+          const settingsSnap = await getDoc(doc(db, 'configuracoes', 'geral'));
+          if (settingsSnap.exists()) {
+            settings = { ...settings, ...(settingsSnap.data() as AppSettings) };
+          }
+        } catch {
+          // ignore
+        }
+
+        if (Object.keys(savedMap).length > 0) {
           // Cache in local storage
           localStorage.setItem(STORAGE_KEY, JSON.stringify(savedMap));
           localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
@@ -60,41 +303,7 @@ export async function loadStoredApartments(): Promise<{ apartments: ApartmentIns
       }
     }
 
-    // Check finalized inspections
-    const finalizedHistory = loadFinalizedInspections();
-    const finalizedIds = new Set(finalizedHistory.map(h => h.apartmentId));
-
-    // Merge saved inspection states into default structure
-    const mergedApartments = baseApartments.map(baseApt => {
-      const saved = savedMap[baseApt.apartmentId];
-      if (!saved) return baseApt;
-
-      if (saved.status === 'finalizada' && finalizedIds.size > 0 && !finalizedIds.has(baseApt.apartmentId)) {
-        return baseApt;
-      }
-
-      const baseItems = createEmptyItemsMap();
-      if (saved.items) {
-        Object.keys(baseItems).forEach(itemKey => {
-          if (saved.items && saved.items[itemKey]) {
-            baseItems[itemKey] = {
-              ...baseItems[itemKey],
-              ...saved.items[itemKey]
-            };
-          }
-        });
-      }
-
-      const isActuallyGenerated = saved.status === 'finalizada' ? false : (saved.isGenerated ?? false);
-
-      return {
-        ...baseApt,
-        ...saved,
-        isGenerated: isActuallyGenerated,
-        items: baseItems
-      };
-    });
-
+    const mergedApartments = mergeApartmentsWithBase(savedMap);
     return { apartments: mergedApartments, settings };
   } catch (err) {
     console.error('Erro ao carregar dados:', err);
@@ -105,64 +314,52 @@ export async function loadStoredApartments(): Promise<{ apartments: ApartmentIns
   }
 }
 
+/**
+ * Subscribes in REAL TIME to all cloud changes in the vistorias_sistema collection.
+ * Any device generating, editing, or resetting an inspection is instantly reflected here.
+ */
 export function subscribeToApartmentsState(
   onUpdate: (data: { apartments: ApartmentInspection[]; settings: AppSettings }) => void
 ): () => void {
   try {
     const db = getDb();
     if (!db) return () => {};
-    const docRef = doc(db, 'vistorias_sistema', 'estado_atual');
-    const unsubscribe = onSnapshot(docRef, (snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
-        const savedMap: Record<string, Partial<ApartmentInspection>> = data.apartments || {};
-        const settings: AppSettings = data.settings || { allGenerated: false, defaultInspector: '' };
-        
-        // Cache to localStorage
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(savedMap));
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 
-        const baseApartments = generateAllApartments();
-        const finalizedHistory = loadFinalizedInspections();
-        const finalizedIds = new Set(finalizedHistory.map(h => h.apartmentId));
+    const colRef = collection(db, 'vistorias_sistema');
+    const unsubscribe = onSnapshot(colRef, (snap) => {
+      const savedMap: Record<string, Partial<ApartmentInspection>> = {};
 
-        const mergedApartments = baseApartments.map(baseApt => {
-          const saved = savedMap[baseApt.apartmentId];
-          if (!saved) return baseApt;
+      snap.docs.forEach(docSnap => {
+        const data = docSnap.data();
+        if (docSnap.id === 'estado_atual' && data.apartments) {
+          // Legacy support
+          Object.assign(savedMap, data.apartments);
+        } else if (docSnap.id !== 'estado_atual') {
+          const aptId = (data.apartmentId || docSnap.id).toUpperCase();
+          savedMap[aptId] = data as Partial<ApartmentInspection>;
+        }
+      });
 
-          // If marked finalized in the current state document, check against history cache
-          // If the status is finalized, ensure it is treated consistently
-          if (saved.status === 'finalizada' && finalizedIds.size > 0 && !finalizedIds.has(baseApt.apartmentId)) {
-            return baseApt;
-          }
+      // Update local cache
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(savedMap));
 
-          const baseItems = createEmptyItemsMap();
-          if (saved.items) {
-            Object.keys(baseItems).forEach(itemKey => {
-              if (saved.items && saved.items[itemKey]) {
-                baseItems[itemKey] = {
-                  ...baseItems[itemKey],
-                  ...saved.items[itemKey]
-                };
-              }
-            });
-          }
-
-          const isActuallyGenerated = saved.status === 'finalizada' ? false : (saved.isGenerated ?? false);
-
-          return {
-            ...baseApt,
-            ...saved,
-            isGenerated: isActuallyGenerated,
-            items: baseItems
-          };
-        });
-
-        onUpdate({ apartments: mergedApartments, settings });
+      // Get settings from cache
+      let settings: AppSettings = { allGenerated: false, defaultInspector: '' };
+      const rawSettings = localStorage.getItem(SETTINGS_KEY);
+      if (rawSettings) {
+        try {
+          settings = { ...settings, ...JSON.parse(rawSettings) };
+        } catch {
+          // ignore
+        }
       }
+
+      const mergedApartments = mergeApartmentsWithBase(savedMap);
+      onUpdate({ apartments: mergedApartments, settings });
     }, (err) => {
-      console.warn('Subscription error on apartments state:', err);
+      console.warn('Subscription error on vistorias_sistema collection:', err);
     });
+
     return unsubscribe;
   } catch (err) {
     console.warn('Could not setup apartment subscription:', err);
@@ -170,34 +367,9 @@ export function subscribeToApartmentsState(
   }
 }
 
-export async function saveApartmentsState(apartments: ApartmentInspection[], settings?: AppSettings): Promise<void> {
-  try {
-    const dataToSave: Record<string, ApartmentInspection> = {};
-    apartments.forEach(apt => {
-      dataToSave[apt.apartmentId] = apt;
-    });
-
-    // Save to localStorage immediately
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
-    if (settings) {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-    }
-
-    // Save to shared Firestore database
-    const db = getDb();
-    if (db) {
-      const docRef = doc(db, 'vistorias_sistema', 'estado_atual');
-      await setDoc(docRef, {
-        apartments: dataToSave,
-        settings: settings || {},
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
-    }
-  } catch (err) {
-    console.error('Erro ao salvar no Firestore:', err);
-  }
-}
-
+/**
+ * Wipes all data from cloud Firestore and local storage.
+ */
 export async function resetAllData(): Promise<void> {
   // 1. Clear local storage
   localStorage.removeItem(STORAGE_KEY);
@@ -212,27 +384,28 @@ export async function resetAllData(): Promise<void> {
   try {
     const db = getDb();
     if (db) {
-      // Delete estado_atual
-      await deleteDoc(doc(db, 'vistorias_sistema', 'estado_atual'));
-      await deleteDoc(doc(db, 'configuracoes', 'geral'));
-      await deleteDoc(doc(db, 'historico_vistorias', 'lista'));
-
       // Clean all docs in vistorias_sistema
       const vSnap = await getDocs(collection(db, 'vistorias_sistema'));
-      for (const d of vSnap.docs) {
-        await deleteDoc(d.ref);
+      if (!vSnap.empty) {
+        const batch = writeBatch(db);
+        vSnap.docs.forEach(d => batch.delete(d.ref));
+        await batch.commit();
       }
 
       // Clean all docs in historico_vistorias
       const hSnap = await getDocs(collection(db, 'historico_vistorias'));
-      for (const d of hSnap.docs) {
-        await deleteDoc(d.ref);
+      if (!hSnap.empty) {
+        const batch = writeBatch(db);
+        hSnap.docs.forEach(d => batch.delete(d.ref));
+        await batch.commit();
       }
 
       // Clean all docs in configuracoes
       const cSnap = await getDocs(collection(db, 'configuracoes'));
-      for (const d of cSnap.docs) {
-        await deleteDoc(d.ref);
+      if (!cSnap.empty) {
+        const batch = writeBatch(db);
+        cSnap.docs.forEach(d => batch.delete(d.ref));
+        await batch.commit();
       }
     }
   } catch (err) {

@@ -8,7 +8,15 @@ import { InspectionHistory } from './components/InspectionHistory';
 import { QuickFixView } from './components/QuickFixView';
 import { SearchAndGenerator } from './components/SearchAndGenerator';
 import { ApartmentInspection, BuildingBlock, InspectionItemState, FinalizedInspection } from './types';
-import { loadStoredApartments, saveApartmentsState, resetAllData, subscribeToApartmentsState } from './utils/storage';
+import {
+  loadStoredApartments,
+  saveApartmentsState,
+  saveSingleApartmentState,
+  saveMultipleApartmentsState,
+  deleteApartmentFromCloud,
+  resetAllData,
+  subscribeToApartmentsState
+} from './utils/storage';
 import { saveFinalizedInspection } from './utils/historyStorage';
 import { createEmptyItemsMap, generateAllApartments } from './data/apartments';
 import { Sparkles, Building2, Search, PlusCircle, CheckCircle2, Trash2, User, Home, Key, AlertTriangle, ArrowRight, X, Wrench, RotateCcw } from 'lucide-react';
@@ -67,25 +75,20 @@ export default function App() {
 
   // Handle service completion
   const handleServiceCompleted = async (aptId: string, itemId: string) => {
-    setApartments(prev => {
-      const next = prev.map(a => {
-        if (a.apartmentId === aptId && a.items[itemId]) {
-          return {
-            ...a,
-            items: {
-              ...a.items,
-              [itemId]: { ...a.items[itemId], status: 'nao', observation: '' } // Mark as done and clear observation
-            },
-            updatedAt: new Date().toISOString()
-          };
-        }
-        return a;
-      });
-      saveApartmentsState(next); // This needs to be awaited if possible, but setState is synchronous. 
-      // Actually, since setState is synchronous, I can't await inside setApartments. 
-      // I should update the state and then await the save separately.
-      return next;
-    });
+    const currentApt = apartments.find(a => a.apartmentId === aptId);
+    if (!currentApt || !currentApt.items || !currentApt.items[itemId]) return;
+
+    const updatedApt: ApartmentInspection = {
+      ...currentApt,
+      items: {
+        ...currentApt.items,
+        [itemId]: { ...currentApt.items[itemId], status: 'nao', observation: '' }
+      },
+      updatedAt: new Date().toISOString()
+    };
+
+    setApartments(prev => prev.map(a => a.apartmentId === aptId ? updatedApt : a));
+    await saveSingleApartmentState(updatedApt);
   };
 
   // Open quick fix / repairs view directly for a specified or searched apartment
@@ -174,11 +177,8 @@ export default function App() {
   // Sync state changes to storage
   const updateApartmentInState = async (updatedApt: ApartmentInspection) => {
     setHistoricalViewApt(null);
-    setApartments(prev => {
-      const next = prev.map(a => a.apartmentId === updatedApt.apartmentId ? updatedApt : a);
-      saveApartmentsState(next);
-      return next;
-    });
+    setApartments(prev => prev.map(a => a.apartmentId === updatedApt.apartmentId ? updatedApt : a));
+    await saveSingleApartmentState(updatedApt);
   };
 
   // Open the unified configuration modal for generating spreadsheet(s)
@@ -213,28 +213,27 @@ export default function App() {
   };
 
   // Delete / reset an apartment spreadsheet
-  const handleDeleteApartmentSheet = (aptId: string) => {
+  const handleDeleteApartmentSheet = async (aptId: string) => {
     const newEmptyItems = createEmptyItemsMap();
-    setApartments(prev => {
-      const next = prev.map(a => {
-        if (a.apartmentId === aptId) {
-          return {
-            ...a,
-            isGenerated: false,
-            status: 'rascunho' as const,
-            updatedAt: undefined,
-            finalizedAt: undefined,
-            inspectorName: '',
-            occupancyStatus: undefined,
-            keyCount: undefined,
-            items: newEmptyItems
-          };
-        }
-        return a;
-      });
-      saveApartmentsState(next);
-      return next;
-    });
+    setApartments(prev => prev.map(a => {
+      if (a.apartmentId === aptId) {
+        return {
+          ...a,
+          isGenerated: false,
+          status: 'rascunho' as const,
+          updatedAt: undefined,
+          finalizedAt: undefined,
+          inspectorName: '',
+          occupancyStatus: undefined,
+          keyCount: undefined,
+          items: newEmptyItems
+        };
+      }
+      return a;
+    }));
+
+    await deleteApartmentFromCloud(aptId);
+
     if (selectedAptId === aptId) {
       setSelectedAptId(null);
       setHistoricalViewApt(null);
@@ -271,63 +270,58 @@ export default function App() {
   };
 
   // Finalizar Vistoria
-  const handleFinalizeInspection = (aptId: string) => {
+  const handleFinalizeInspection = async (aptId: string) => {
     const nowIso = new Date().toISOString();
     const dateObj = new Date(nowIso);
     const inspectionDate = dateObj.toISOString().split('T')[0];
     const inspectionTime = dateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-    setApartments(prev => {
-      const apartment = prev.find(a => a.apartmentId === aptId);
-      if (!apartment) return prev;
+    const apartment = apartments.find(a => a.apartmentId === aptId);
+    if (!apartment) return;
 
-      // Calculate counts
-      let simCount = 0;
-      let naoCount = 0;
-      let pendingCount = 0;
-      (Object.values(apartment.items || {}) as InspectionItemState[]).forEach(item => {
-        if (item.status === 'sim') simCount++;
-        else if (item.status === 'nao') naoCount++;
-        else pendingCount++;
-      });
-
-      const finalizedRecord: FinalizedInspection = {
-        id: `${apartment.apartmentId}_${Date.now()}`,
-        apartmentId: apartment.apartmentId,
-        block: apartment.block,
-        number: apartment.number,
-        floor: apartment.floor,
-        inspectorName: apartment.inspectorName,
-        occupancyStatus: apartment.occupancyStatus,
-        keyCount: apartment.keyCount,
-        finalizedAt: nowIso,
-        inspectionDate,
-        inspectionTime,
-        items: apartment.items,
-        simCount,
-        naoCount,
-        pendingCount
-      };
-      
-      saveFinalizedInspection(finalizedRecord);
-
-      const next = prev.map(a => {
-        if (a.apartmentId === aptId) {
-          return {
-            ...a,
-            status: 'finalizada' as const,
-            finalizedAt: nowIso
-          };
-        }
-        return a;
-      });
-      saveApartmentsState(next);
-      return next;
+    // Calculate counts
+    let simCount = 0;
+    let naoCount = 0;
+    let pendingCount = 0;
+    (Object.values(apartment.items || {}) as InspectionItemState[]).forEach(item => {
+      if (item.status === 'sim') simCount++;
+      else if (item.status === 'nao') naoCount++;
+      else pendingCount++;
     });
+
+    const finalizedRecord: FinalizedInspection = {
+      id: `${apartment.apartmentId}_${Date.now()}`,
+      apartmentId: apartment.apartmentId,
+      block: apartment.block,
+      number: apartment.number,
+      floor: apartment.floor,
+      inspectorName: apartment.inspectorName,
+      occupancyStatus: apartment.occupancyStatus,
+      keyCount: apartment.keyCount,
+      finalizedAt: nowIso,
+      inspectionDate,
+      inspectionTime,
+      items: apartment.items,
+      simCount,
+      naoCount,
+      pendingCount
+    };
+    
+    saveFinalizedInspection(finalizedRecord);
+
+    const updatedApt: ApartmentInspection = {
+      ...apartment,
+      status: 'finalizada' as const,
+      finalizedAt: nowIso,
+      updatedAt: nowIso
+    };
+
+    setApartments(prev => prev.map(a => a.apartmentId === aptId ? updatedApt : a));
+    await saveSingleApartmentState(updatedApt);
   };
 
   // Confirm generation from the unified modal
-  const handleConfirmGeneration = () => {
+  const handleConfirmGeneration = async () => {
     if (!inspectorName.trim()) {
       setModalError('Por favor, informe o nome do vistoriador / responsável.');
       return;
@@ -362,12 +356,14 @@ export default function App() {
       }
 
       let firstAptIdToOpen: string | null = null;
+      const updatedList: ApartmentInspection[] = [];
+
       setApartments(prev => {
         const next = prev.map(a => {
           if (filteredApartments.some(fa => fa.apartmentId === a.apartmentId)) {
             if (!firstAptIdToOpen) firstAptIdToOpen = a.apartmentId;
             const shouldReset = a.status === 'finalizada' || !a.items || a.isSaved;
-            return {
+            const updated: ApartmentInspection = {
               ...a,
               isGenerated: true,
               isSaved: false,
@@ -380,12 +376,17 @@ export default function App() {
               items: shouldReset ? createEmptyItemsMap() : a.items,
               updatedAt: nowIso
             };
+            updatedList.push(updated);
+            return updated;
           }
           return a;
         });
-        saveApartmentsState(next, { allGenerated: false, defaultInspector: finalInspector });
         return next;
       });
+
+      if (updatedList.length > 0) {
+        await saveMultipleApartmentsState(updatedList, { allGenerated: false, defaultInspector: finalInspector });
+      }
 
       if (firstAptIdToOpen) {
         setSelectedAptId(firstAptIdToOpen);
@@ -400,11 +401,13 @@ export default function App() {
         return;
       }
 
+      let newlyGeneratedApt: ApartmentInspection | null = null;
+
       setApartments(prev => {
         const next = prev.map(a => {
           if (a.apartmentId === targetId) {
             const shouldReset = a.status === 'finalizada' || !a.items || a.isSaved;
-            return {
+            const updated: ApartmentInspection = {
               ...a,
               isGenerated: true,
               isSaved: false,
@@ -417,12 +420,17 @@ export default function App() {
               items: shouldReset ? createEmptyItemsMap() : a.items,
               updatedAt: nowIso
             };
+            newlyGeneratedApt = updated;
+            return updated;
           }
           return a;
         });
-        saveApartmentsState(next);
         return next;
       });
+
+      if (newlyGeneratedApt) {
+        await saveSingleApartmentState(newlyGeneratedApt);
+      }
 
       setSelectedAptId(targetId);
       setActiveView('spreadsheet');

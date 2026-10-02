@@ -264,11 +264,11 @@ export const QuickFixView: React.FC<QuickFixViewProps> = ({
         </div>
 
         {/* Action: Confirm all repairs / Back */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           {!isFinalized && pendingRepairsCount > 0 && (
             <button
               onClick={handleConfirmAllRepairs}
-              className="py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center gap-2 cursor-pointer hover:shadow-lg active:scale-95"
+              className="w-full sm:w-auto min-h-[44px] py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold text-xs sm:text-sm rounded-xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer hover:shadow-lg active:scale-95"
               title="Confirmar todos os reparos e voltar para a tela de pesquisa inicial"
             >
               <CheckCircle2 className="w-4 h-4" />

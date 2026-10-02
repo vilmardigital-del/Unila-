@@ -618,13 +618,13 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                                     }, 50);
                                   }
                                 }}
-                                className={`flex-1 py-1.5 px-2.5 rounded-lg font-bold text-xs border transition-all flex items-center justify-center gap-1.5 ${
+                                className={`flex-1 min-h-[38px] py-1.5 px-2.5 rounded-xl font-bold text-xs sm:text-sm border transition-all flex items-center justify-center gap-1.5 ${
                                   isSim
                                     ? 'bg-amber-500 text-white border-amber-600 shadow-sm ring-2 ring-amber-300'
-                                    : 'bg-white text-gray-600 border-gray-300 hover:bg-amber-50 hover:text-amber-800 hover:border-amber-300'
-                                } ${isLocked ? 'cursor-not-allowed opacity-90' : ''}`}
+                                    : 'bg-white text-gray-700 border-gray-300 hover:bg-amber-50 hover:text-amber-800 hover:border-amber-300 active:bg-amber-100'
+                                } ${isLocked ? 'cursor-not-allowed opacity-90' : 'cursor-pointer active:scale-95'}`}
                               >
-                                {isSim && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                {isSim && <Check className="w-4 h-4 stroke-[3]" />}
                                 <span>SIM</span>
                               </button>
 
@@ -633,13 +633,13 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                                 type="button"
                                 disabled={isLocked}
                                 onClick={() => handleItemChange(itemKey, 'status', isNao ? null : 'nao')}
-                                className={`flex-1 py-1.5 px-2.5 rounded-lg font-bold text-xs border transition-all flex items-center justify-center gap-1.5 ${
+                                className={`flex-1 min-h-[38px] py-1.5 px-2.5 rounded-xl font-bold text-xs sm:text-sm border transition-all flex items-center justify-center gap-1.5 ${
                                   isNao
                                     ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm ring-2 ring-emerald-300'
-                                    : 'bg-white text-gray-600 border-gray-300 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300'
-                                } ${isLocked ? 'cursor-not-allowed opacity-90' : ''}`}
+                                    : 'bg-white text-gray-700 border-gray-300 hover:bg-emerald-50 hover:text-emerald-800 hover:border-emerald-300 active:bg-emerald-100'
+                                } ${isLocked ? 'cursor-not-allowed opacity-90' : 'cursor-pointer active:scale-95'}`}
                               >
-                                {isNao && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                                {isNao && <Check className="w-4 h-4 stroke-[3]" />}
                                 <span>NÃO</span>
                               </button>
 
@@ -735,13 +735,13 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
         </div>
 
         {/* Bottom Action Bar (At the end of the spreadsheet) */}
-        <div className="bg-white border border-purple-200 rounded-2xl p-4 sm:p-5 shadow-md flex flex-col lg:flex-row items-center justify-between gap-4 print:hidden">
+        <div className="bg-white border-t-2 border-purple-200 p-4 sm:p-5 shadow-md flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 print:hidden">
 
           {/* Left: Quick Export / PDF Tool */}
-          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-center lg:justify-start">
+          <div className="w-full md:w-auto">
             <button
               onClick={() => exportApartmentToPDF(localApartment)}
-              className="px-4 py-2.5 bg-purple-900 hover:bg-purple-800 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer"
+              className="w-full md:w-auto min-h-[44px] px-4 py-2.5 bg-purple-900 hover:bg-purple-800 active:bg-purple-950 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95 cursor-pointer"
               title="Baixar a planilha completa de vistoria com cabeçalho e observações em formato PDF"
             >
               <Download className="w-4 h-4 text-amber-300" />
@@ -750,22 +750,20 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
           </div>
 
           {/* Right: State / Finalization Actions */}
-          <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto justify-center lg:justify-end">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto">
 
             {localApartment.status === 'finalizada' ? (
-              <>
-                <button
-                  onClick={() => setShowReopenPasswordModal(true)}
-                  className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95 border border-amber-500 cursor-pointer"
-                  title="Reabrir vistoria para edição (Requer senha de administrador)"
-                >
-                  <Unlock className="w-4 h-4 text-amber-100" />
-                  <span>Reabrir Vistoria</span>
-                </button>
-              </>
+              <button
+                onClick={() => setShowReopenPasswordModal(true)}
+                className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95 border border-amber-500 cursor-pointer"
+                title="Reabrir vistoria para edição (Requer senha de administrador)"
+              >
+                <Unlock className="w-4 h-4 text-amber-100" />
+                <span>Reabrir Vistoria</span>
+              </button>
             ) : isLocked ? (
               <>
-                <div className="flex items-center gap-2 text-xs font-bold text-purple-900 bg-purple-100 px-4 py-2.5 rounded-xl border border-purple-300">
+                <div className="flex items-center justify-center gap-2 text-xs font-bold text-purple-900 bg-purple-100 px-4 min-h-[44px] py-2.5 rounded-xl border border-purple-300">
                   <Lock className="w-4 h-4 text-purple-700" />
                   <span>Planilha Salva (Bloqueada)</span>
                 </div>
@@ -773,7 +771,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                 {/* Botão Finalizar Vistoria */}
                 <button
                   onClick={initiateFinalization}
-                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95 border border-emerald-500 cursor-pointer"
+                  className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 border border-emerald-500 cursor-pointer"
                   title="Finalizar esta vistoria e armazenar no banco de dados"
                 >
                   <FileCheck className="w-4 h-4 text-emerald-100" />
@@ -785,7 +783,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                 {/* Botão Salvar Planilha */}
                 <button
                   onClick={handleSaveSpreadsheet}
-                  className="px-6 py-2.5 bg-purple-900 hover:bg-purple-800 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95 border border-purple-700 cursor-pointer"
+                  className="w-full sm:w-auto min-h-[44px] px-6 py-2.5 bg-purple-900 hover:bg-purple-800 active:bg-purple-950 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 border border-purple-700 cursor-pointer"
                   title="Salvar planilha (após salvar, ela não poderá mais ser modificada aberta, apenas via botão Reparos)"
                 >
                   <Save className="w-4 h-4 text-amber-300" />
@@ -795,7 +793,7 @@ export const ApartmentSpreadsheet: React.FC<ApartmentSpreadsheetProps> = ({
                 {/* Botão Finalizar Vistoria */}
                 <button
                   onClick={initiateFinalization}
-                  className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center gap-2 shadow-lg hover:shadow-xl transition-all active:scale-95 border border-emerald-500 cursor-pointer"
+                  className="w-full sm:w-auto min-h-[44px] px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-extrabold rounded-xl text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 border border-emerald-500 cursor-pointer"
                   title="Finalizar esta vistoria e armazenar no banco de dados"
                 >
                   <FileCheck className="w-4 h-4 text-emerald-100" />
