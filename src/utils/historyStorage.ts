@@ -12,6 +12,11 @@ import {
 
 const HISTORY_STORAGE_KEY = 'unila_vistorias_finalizadas_v1';
 
+function cleanFirestoreData<T>(obj: T): T {
+  if (obj === null || obj === undefined) return obj;
+  return JSON.parse(JSON.stringify(obj));
+}
+
 export function loadFinalizedInspections(): FinalizedInspection[] {
   try {
     const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
@@ -110,11 +115,12 @@ export function saveFinalizedInspection(inspection: FinalizedInspection): Finali
 
     localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(updatedList));
 
-    // Save to Firestore in its own document
+    // Save to Firestore in its own document with sanitized data
     const db = getDb();
     if (db) {
       const docRef = doc(db, 'historico_vistorias', inspection.id);
-      setDoc(docRef, inspection, { merge: true }).catch(err => {
+      const payload = cleanFirestoreData(inspection);
+      setDoc(docRef, payload, { merge: true }).catch(err => {
         console.error('Erro ao sincronizar histórico com Firestore:', err);
       });
     }
