@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">UNILA Vistorias</string>
+    <string name="app_description">Sistema de Vistoria de Apartamentos - UNILA</string>
+    <string name="offline_title">Sem Conexão com a Internet</string>
+    <string name="offline_message">Você está usando o aplicativo em modo offline. As vistorias em cache estão acessíveis e suas alterações serão sincronizadas assim que a conexão for restabelecida.</string>
+    <string name="retry">Tentar Novamente</string>
+    <string name="online_status">Conectado (Online)</string>
+    <string name="offline_status">Modo Offline Ativo</string>
+</resources>

@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/bg_light">
+
+    <!-- Top Offline Warning Banner -->
+    <LinearLayout
+        android:id="@+id/offlineBanner"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:background="#fef3c7"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:visibility="gone"
+        android:gravity="center"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <TextView
+            android:id="@+id/offlineBannerText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Modo Offline Ativo - Suas alterações estão salvas localmente e sincronizarão ao reconectar."
+            android:textColor="#92400e"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:gravity="center" />
+    </LinearLayout>
+
+    <!-- Main WebView with Pull-to-Refresh -->
+    <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+        android:id="@+id/swipeRefresh"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toBottomOf="@id/offlineBanner"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <WebView
+            android:id="@+id/webView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+    </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+
+    <!-- Top Loading Bar -->
+    <ProgressBar
+        android:id="@+id/progressBar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="0dp"
+        android:layout_height="4dp"
+        android:indeterminate="true"
+        android:visibility="visible"
+        android:progressTint="@color/purple_primary"
+        app:layout_constraintTop_toBottomOf="@id/offlineBanner"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Full-screen Offline Fallback (Only shown if initial load fails and cache is empty) -->
+    <LinearLayout
+        android:id="@+id/offlineFallbackContainer"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:padding="32dp"
+        android:visibility="gone"
+        android:background="@color/bg_light"
+        app:layout_constraintTop_toBottomOf="@id/offlineBanner"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="UNILA Vistorias"
+            android:textColor="@color/purple_primary_dark"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/offline_title"
+            android:textColor="@color/gray_text"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="8dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/offline_message"
+            android:textColor="@color/gray_text"
+            android:textSize="14sp"
+            android:gravity="center"
+            android:layout_marginBottom="24dp" />
+
+        <Button
+            android:id="@+id/btnRetry"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/retry"
+            android:backgroundTint="@color/purple_primary"
+            android:textColor="@color/white"
+            android:paddingStart="24dp"
+            android:paddingEnd="24dp" />
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -1,15 +1,33 @@
 import React from 'react';
-import { ArrowRight, FileSpreadsheet, CheckCircle2, User, Key, Home } from 'lucide-react';
-import { ApartmentInspection } from '../types';
+import { ArrowRight, FileSpreadsheet, CheckCircle2, User, Key, Home, Wrench, AlertTriangle } from 'lucide-react';
+import { ApartmentInspection, InspectionItemState } from '../types';
 
 interface CompactTableProps {
   apartments: ApartmentInspection[];
   onSelectApartment: (id: string) => void;
+  onOpenRepairs?: (id: string) => void;
 }
 
-export const CompactApartmentTable: React.FC<CompactTableProps> = ({ apartments, onSelectApartment }) => {
+export const CompactApartmentTable: React.FC<CompactTableProps> = ({
+  apartments,
+  onSelectApartment,
+  onOpenRepairs
+}) => {
   // Filter only generated apartments
   const generatedApartments = apartments.filter(apt => apt.isGenerated);
+
+  // Helper to count repairs (items with SIM status or observations)
+  const getRepairsCount = (apt: ApartmentInspection) => {
+    let count = 0;
+    if (apt.items) {
+      (Object.values(apt.items) as InspectionItemState[]).forEach(it => {
+        if (it && it.status === 'sim') {
+          count++;
+        }
+      });
+    }
+    return count;
+  };
 
   if (generatedApartments.length === 0) {
     return (
@@ -43,58 +61,88 @@ export const CompactApartmentTable: React.FC<CompactTableProps> = ({ apartments,
 
       {/* MOBILE LIST VIEW (Optimized for Phones) */}
       <div className="md:hidden divide-y divide-purple-100">
-        {generatedApartments.map((apt) => (
-          <div key={apt.apartmentId} className="p-3.5 space-y-2.5 hover:bg-purple-50/40 transition-colors">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2.5">
-                <span className="w-10 h-10 rounded-xl bg-purple-900 text-white font-black text-sm flex items-center justify-center shrink-0 shadow-xs">
-                  {apt.apartmentId}
-                </span>
-                <div>
-                  <div className="text-xs font-bold text-gray-900">
-                    Bloco {apt.block} • {apt.floor}
+        {generatedApartments.map((apt) => {
+          const repairsCount = getRepairsCount(apt);
+          const isFinalized = apt.status === 'finalizada';
+
+          return (
+            <div key={apt.apartmentId} className="p-3.5 space-y-2.5 hover:bg-purple-50/40 transition-colors">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-10 h-10 rounded-xl bg-purple-900 text-white font-black text-sm flex items-center justify-center shrink-0 shadow-xs">
+                    {apt.apartmentId}
+                  </span>
+                  <div>
+                    <div className="text-xs font-bold text-gray-900">
+                      Bloco {apt.block} • {apt.floor}
+                    </div>
+                    <div className="text-[11px] text-gray-500 flex items-center gap-1 mt-0.5">
+                      <User className="w-3 h-3 text-purple-600" />
+                      <span>{apt.inspectorName || 'Sem responsável'}</span>
+                    </div>
                   </div>
-                  <div className="text-[11px] text-gray-500 flex items-center gap-1 mt-0.5">
-                    <User className="w-3 h-3 text-purple-600" />
-                    <span>{apt.inspectorName || 'Sem responsável'}</span>
-                  </div>
+                </div>
+
+                <div className="flex flex-col items-end gap-1">
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                    isFinalized
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      : 'bg-purple-100 text-purple-800 border border-purple-300'
+                  }`}>
+                    {isFinalized ? 'Finalizada' : 'Em Andamento'}
+                  </span>
+
+                  {repairsCount > 0 && (
+                    <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 px-2 py-0.2 rounded-full text-[10px] font-black">
+                      <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
+                      <span>{repairsCount} {repairsCount === 1 ? 'reparo' : 'reparos'}</span>
+                    </span>
+                  )}
                 </div>
               </div>
 
-              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                apt.status === 'finalizada'
-                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                  : 'bg-purple-100 text-purple-800 border border-purple-300'
-              }`}>
-                {apt.status === 'finalizada' ? 'Finalizada' : 'Em Andamento'}
-              </span>
-            </div>
+              {/* Quick Metadata */}
+              <div className="grid grid-cols-2 gap-1.5 text-[11px] text-gray-600 bg-purple-50/50 p-2 rounded-lg border border-purple-100/60">
+                <div className="flex items-center gap-1 truncate">
+                  <Home className="w-3 h-3 text-purple-600 shrink-0" />
+                  <span className="capitalize">Status: <strong>{apt.occupancyStatus || 'N/A'}</strong></span>
+                </div>
+                <div className="flex items-center gap-1 truncate">
+                  <Key className="w-3 h-3 text-purple-600 shrink-0" />
+                  <span>Chaves: <strong>{apt.keyCount || 'N/A'}</strong></span>
+                </div>
+              </div>
 
-            {/* Quick Metadata */}
-            <div className="grid grid-cols-2 gap-1.5 text-[11px] text-gray-600 bg-purple-50/50 p-2 rounded-lg border border-purple-100/60">
-              <div className="flex items-center gap-1 truncate">
-                <Home className="w-3 h-3 text-purple-600 shrink-0" />
-                <span className="capitalize">Status: <strong>{apt.occupancyStatus || 'N/A'}</strong></span>
-              </div>
-              <div className="flex items-center gap-1 truncate">
-                <Key className="w-3 h-3 text-purple-600 shrink-0" />
-                <span>Chaves: <strong>{apt.keyCount || 'N/A'}</strong></span>
+              {/* Mobile Action Buttons: Reparo + Abrir Planilha */}
+              <div className="flex items-center gap-2 pt-1">
+                {onOpenRepairs && (
+                  <button
+                    onClick={() => onOpenRepairs(apt.apartmentId)}
+                    className={`flex-1 min-h-[42px] py-2 px-3 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer border ${
+                      repairsCount > 0
+                        ? 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white border-amber-600'
+                        : 'bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-200'
+                    }`}
+                    title="Consultar e gerenciar reparos deste apartamento"
+                  >
+                    <Wrench className={`w-4 h-4 ${repairsCount > 0 ? 'text-amber-100' : 'text-amber-600'}`} />
+                    <span>Reparos{repairsCount > 0 ? ` (${repairsCount})` : ''}</span>
+                  </button>
+                )}
+
+                <button
+                  onClick={() => onSelectApartment(apt.apartmentId)}
+                  className="flex-1 min-h-[42px] py-2 px-3 bg-purple-900 hover:bg-purple-800 active:bg-purple-950 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+                  title="Abrir planilha de vistoria"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-purple-300" />
+                  <span>Planilha</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-purple-300 ml-0.5" />
+                </button>
               </div>
             </div>
-
-            {/* Large Mobile Action Button */}
-            <button
-              onClick={() => onSelectApartment(apt.apartmentId)}
-              className="w-full min-h-[44px] py-2 px-3 bg-purple-900 hover:bg-purple-800 active:bg-purple-950 text-white font-bold text-xs rounded-xl flex items-center justify-between shadow-xs transition-all active:scale-95 cursor-pointer"
-            >
-              <div className="flex items-center gap-2">
-                <FileSpreadsheet className="w-4 h-4 text-purple-200" />
-                <span>Abrir Planilha de Vistoria</span>
-              </div>
-              <ArrowRight className="w-4 h-4 text-purple-300" />
-            </button>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* DESKTOP / TABLET TABLE VIEW */}
@@ -108,37 +156,70 @@ export const CompactApartmentTable: React.FC<CompactTableProps> = ({ apartments,
               <th className="py-2.5 px-3">Ocupação</th>
               <th className="py-2.5 px-3">Chaves</th>
               <th className="py-2.5 px-3">Status</th>
-              <th className="py-2.5 px-3 text-right">Ação</th>
+              <th className="py-2.5 px-3">Reparos</th>
+              <th className="py-2.5 px-3 text-right">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-purple-100">
-            {generatedApartments.map((apt) => (
-              <tr key={apt.apartmentId} className="hover:bg-purple-50/60 transition-colors">
-                <td className="py-2.5 px-3 font-black text-purple-950 text-sm">{apt.apartmentId}</td>
-                <td className="py-2.5 px-3 font-bold text-gray-800">Bloco {apt.block}</td>
-                <td className="py-2.5 px-3 text-gray-700 font-medium">{apt.inspectorName || 'Não informado'}</td>
-                <td className="py-2.5 px-3 capitalize">{apt.occupancyStatus || 'N/A'}</td>
-                <td className="py-2.5 px-3">{apt.keyCount || 'N/A'}</td>
-                <td className="py-2.5 px-3">
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                    apt.status === 'finalizada'
-                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                      : 'bg-purple-100 text-purple-800 border border-purple-300'
-                  }`}>
-                    {apt.status === 'finalizada' ? 'Finalizada' : 'Ativa / Em Andamento'}
-                  </span>
-                </td>
-                <td className="py-2.5 px-3 text-right">
-                  <button
-                    onClick={() => onSelectApartment(apt.apartmentId)}
-                    className="py-1.5 px-3 bg-purple-900 hover:bg-purple-800 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 ml-auto shadow-xs transition-colors cursor-pointer"
-                  >
-                    <span>Abrir Planilha</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {generatedApartments.map((apt) => {
+              const repairsCount = getRepairsCount(apt);
+              const isFinalized = apt.status === 'finalizada';
+
+              return (
+                <tr key={apt.apartmentId} className="hover:bg-purple-50/60 transition-colors">
+                  <td className="py-2.5 px-3 font-black text-purple-950 text-sm">{apt.apartmentId}</td>
+                  <td className="py-2.5 px-3 font-bold text-gray-800">Bloco {apt.block}</td>
+                  <td className="py-2.5 px-3 text-gray-700 font-medium">{apt.inspectorName || 'Não informado'}</td>
+                  <td className="py-2.5 px-3 capitalize">{apt.occupancyStatus || 'N/A'}</td>
+                  <td className="py-2.5 px-3">{apt.keyCount || 'N/A'}</td>
+                  <td className="py-2.5 px-3">
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                      isFinalized
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                        : 'bg-purple-100 text-purple-800 border border-purple-300'
+                    }`}>
+                      {isFinalized ? 'Finalizada' : 'Em Andamento'}
+                    </span>
+                  </td>
+                  <td className="py-2.5 px-3">
+                    {repairsCount > 0 ? (
+                      <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-black px-2.5 py-0.5 rounded-full">
+                        <AlertTriangle className="w-3 h-3 text-amber-600" />
+                        <span>{repairsCount} {repairsCount === 1 ? 'reparo' : 'reparos'}</span>
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-gray-400 font-medium">Nenhum</span>
+                    )}
+                  </td>
+                  <td className="py-2.5 px-3 text-right">
+                    <div className="flex items-center justify-end gap-1.5">
+                      {onOpenRepairs && (
+                        <button
+                          onClick={() => onOpenRepairs(apt.apartmentId)}
+                          className={`py-1.5 px-2.5 font-bold rounded-lg text-xs flex items-center gap-1 shadow-2xs transition-colors cursor-pointer border ${
+                            repairsCount > 0
+                              ? 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800 text-white border-amber-600'
+                              : 'bg-amber-50 hover:bg-amber-100 text-amber-800 border-amber-200'
+                          }`}
+                          title="Consultar e gerenciar reparos deste apartamento"
+                        >
+                          <Wrench className={`w-3.5 h-3.5 ${repairsCount > 0 ? 'text-amber-100' : 'text-amber-600'}`} />
+                          <span>Reparos{repairsCount > 0 ? ` (${repairsCount})` : ''}</span>
+                        </button>
+                      )}
+                      <button
+                        onClick={() => onSelectApartment(apt.apartmentId)}
+                        className="py-1.5 px-3 bg-purple-900 hover:bg-purple-800 text-white font-bold rounded-lg text-xs flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+                        title="Abrir planilha de vistoria completa"
+                      >
+                        <span>Planilha</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="purple_primary">#581c87</color>
+    <color name="purple_primary_dark">#3b0764</color>
+    <color name="purple_accent">#7e22ce</color>
+    <color name="emerald_online">#10b981</color>
+    <color name="amber_offline">#f59e0b</color>
+    <color name="bg_light">#faf5ff</color>
+    <color name="white">#ffffff</color>
+    <color name="black">#000000</color>
+    <color name="gray_text">#4b5563</color>
+</resources>

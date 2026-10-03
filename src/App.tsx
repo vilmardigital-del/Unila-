@@ -608,7 +608,11 @@ export default function App() {
                 )}
               </div>
             ) : (
-              <CompactApartmentTable apartments={apartments} onSelectApartment={handleSelectApartment} />
+              <CompactApartmentTable
+                apartments={apartments}
+                onSelectApartment={handleSelectApartment}
+                onOpenRepairs={(aptId) => handleOpenRepairsForApartment(aptId)}
+              />
             )}
 
           </div>
